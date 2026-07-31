@@ -8,12 +8,12 @@ device: cuda  # set to cpu to force CPU
 mode: train  # train or infer
 
 data:
-  csv_path_l: data\cadenza_data_train\metadata\train_metadata_l.csv
-  csv_path_r: data\cadenza_data_train\metadata\train_metadata_r.csv
-  valid_path_l: data\cadenza_data_valid\metadata\valid_metadata_l.csv
-  valid_path_r: data\cadenza_data_valid\metadata\valid_metadata_r.csv
-  eval_path_l: data\cadenza_data_eval\metadata\eval_metadata_l.csv
-  eval_path_r: data\cadenza_data_eval\metadata\eval_metadata_r.csv
+  csv_path_l: data/cadenza_data_train/metadata/train_metadata_l.csv
+  csv_path_r: data/cadenza_data_train/metadata/train_metadata_r.csv
+  valid_path_l: data/cadenza_data_valid/metadata/valid_metadata_l.csv
+  valid_path_r: data/cadenza_data_valid/metadata/valid_metadata_r.csv
+  eval_path_l: data/cadenza_data_eval/metadata/eval_metadata_l.csv
+  eval_path_r: data/cadenza_data_eval/metadata/eval_metadata_r.csv
   feature_cols:
     - n_words
     - tiny

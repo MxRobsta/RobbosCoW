@@ -1,0 +1,72 @@
+defaults:
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+exp_name: final
+seed: 42
+device: cuda  # set to cpu to force CPU
+mode: train  # train or infer
+debug: true
+
+datasets: "clip1"
+
+scratch_dir: data/scratch
+
+data:
+  csv_path: ${scratch_dir}/probs/{dataset}.{subset}_metadata_{side}.csv
+  feature_cols:
+    - n_words
+    - tiny
+    - tiny.en
+    - base
+    - base.en
+    - small
+    - small.en
+    - medium
+    - medium.en
+    - large
+    - large-v2
+    - large-v3
+    - large-v3-turbo
+    - stoi
+    - estoi
+    - pesq
+    - dns_sig
+    - dns_bak
+    - dns_ovrl
+
+model:
+  d_model: 64
+  nhead: 4
+  num_layers: 1
+  dropout: 0.1
+  n_hearing: 3
+
+train:
+  batch_size: 1024
+  epochs: 100
+  lr: 1e-4
+  corr_lambda: 0.4
+  val_split: 0.2
+  save_dir: checkpoints/${exp_name}
+
+infer:
+  splits:
+    - valid
+    - eval
+  clamp_scores: true
+  scale_to_percentage: true
+  output_name:
+    train: train_inference.csv
+    valid: valid_inference.csv
+    eval: eval_inference.csv
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  sweep:
+    dir: .
+    subdir: sweep
+  job:
+    chdir: false

@@ -7,6 +7,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import hydra
 
+from tqdm import tqdm
+
 from data import (
     SpeechDatasetDual,
     collate_fn_dual,
@@ -55,7 +57,13 @@ def build_model(cfg):
 
 
 def build_dataloaders(cfg):
-    df_l, df_r = load_metadata(cfg.data.csv_path_l, cfg.data.csv_path_r)
+    if isinstance(cfg.datasets, list):
+        raise NotImplementedError("Currently only accepting on a single dataset")
+
+    lpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="l")
+    rpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="r")
+
+    df_l, df_r = load_metadata(lpath, rpath)
     train_signals, val_signals = split_signals_by_prompt(
         df_l, cfg.train.val_split, cfg.seed
     )
@@ -66,6 +74,10 @@ def build_dataloaders(cfg):
     val_dataset = SpeechDatasetDual(
         df_l, df_r, val_signals, feature_cols=cfg.data.feature_cols, train=True
     )
+
+    if cfg.debug:
+        train_dataset.signals = train_dataset.signals[:10]
+        val_dataset.signals = val_dataset.signals[:10]
 
     train_loader = DataLoader(
         train_dataset,
@@ -82,11 +94,16 @@ def build_dataloaders(cfg):
     return train_loader, val_loader
 
 
-def train_one_epoch(model, dataloader, optimizer, device, corr_lambda: float):
+def train_one_epoch(
+    model, dataloader, optimizer, device, corr_lambda: float, use_tqdm: bool
+):
     model.train()
     mse_loss_fn = nn.MSELoss()
     total_loss = 0.0
     n = 0
+
+    if use_tqdm:
+        dataloader = tqdm(dataloader, desc="Training")
 
     for (
         feats_l,
@@ -116,9 +133,13 @@ def train_one_epoch(model, dataloader, optimizer, device, corr_lambda: float):
     return total_loss / n
 
 
-def evaluate(model, dataloader, device):
+def evaluate(model, dataloader, data_subset, device, use_tqdm):
     model.eval()
     y_true_all, y_pred_all = [], []
+
+    if use_tqdm:
+        dataloader = tqdm(dataloader, desc=f"Evaluating {data_subset}")
+
     with torch.no_grad():
         for (
             feats_l,
@@ -145,7 +166,7 @@ def save_train_log(log, path: Path):
     df.to_csv(path, index=False)
 
 
-@hydra.main(version_base=None, config_path="checkpoints/final", config_name="config")
+@hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
     set_seed(cfg.seed)
     device = torch.device(
@@ -165,13 +186,15 @@ def main(cfg):
     best_model_path = save_dir / "model.pt"
     train_log_path = save_dir / "train_log.csv"
 
+    use_tqdm = cfg.debug or cfg.device == "cpu"
+
     for epoch in range(1, cfg.train.epochs + 1):
         print(f"\nEpoch {epoch}/{cfg.train.epochs}")
         train_loss = train_one_epoch(
-            model, train_loader, optimizer, device, cfg.train.corr_lambda
+            model, train_loader, optimizer, device, cfg.train.corr_lambda, use_tqdm
         )
-        train_rmse = evaluate(model, train_loader, device)
-        val_rmse = evaluate(model, val_loader, device)
+        train_rmse = evaluate(model, train_loader, "train", device, use_tqdm)
+        val_rmse = evaluate(model, val_loader, "valid", device, use_tqdm)
         print(f"Train Loss: {train_loss:.6f} | Train RMSE: {train_rmse:.4f}")
         print(f"Val RMSE:   {val_rmse:.4f}")
 

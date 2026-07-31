@@ -1,0 +1,76 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0 # Use the ref you want to point at
+    hooks:
+      - id: trailing-whitespace
+        types: [file, text]
+      - id: check-docstring-first
+      - id: check-case-conflict
+      - id: end-of-file-fixer
+        types: [python]
+      - id: requirements-txt-fixer
+      - id: mixed-line-ending
+        types: [python]
+        args: [--fix=no]
+      - id: check-added-large-files
+        args: [--maxkb=20000]
+      - id: debug-statements
+      - id: fix-byte-order-marker
+      - id: check-yaml
+
+  #- repo: https://github.com/pre-commit/mirrors-isort
+  #  rev: v5.10.1
+  #  hooks:
+  #    - id: isort
+  #      args: ["--profile", "black", "--filter-files"]
+  #      name: isort
+  #      types: [python]
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.18.1
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        types: [python]
+        additional_dependencies: ["click==8.0.4"]
+
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.9.1
+    hooks:
+      - id: nbqa-black
+      - id: nbqa-flake8
+        args: ["--extend-ignore=E203,E402,E501"]
+      - id: nbqa-isort
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout
+
+  #  - repo: https://github.com/pre-commit/mirrors-mypy
+  #    rev: v1.16.0
+  #    hooks:
+  #      - id: mypy
+  #        args: [--no-strict-optional, --ignore-missing-imports]
+  #        additional_dependencies: [types-toml]
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+#ci:
+#  autofix_prs: true
+#  autofix_commit_msg: "[pre-commit.ci] Fixing issues with pre-commit"
+#  autoupdate_schedule: weekly
+#  autoupdate_commit_msg: "[pre-commit.ci] pre-commit-autoupdate"
+#  skip: [pylint_warnings] # Optionally list ids of hooks to skip on CI

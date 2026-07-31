@@ -10,16 +10,22 @@ import yaml
 from pathlib import Path
 import soundfile as sf
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # -----------------------------
 # Contractions
 THIS_DIR = Path(__file__).resolve().parent
 CONTRACTIONS_PATH = THIS_DIR / "contractions.csv"
-contractions_df = pd.read_csv(CONTRACTIONS_PATH, sep=",", header=None, names=["short", "long"])
+contractions_df = pd.read_csv(
+    CONTRACTIONS_PATH, sep=",", header=None, names=["short", "long"]
+)
 # Create a dictionary: "can't" -> ["can", "not"]
-CONTRACTIONS = {row["short"].lower(): row["long"].lower().split() for _, row in contractions_df.iterrows()}
+CONTRACTIONS = {
+    row["short"].lower(): row["long"].lower().split()
+    for _, row in contractions_df.iterrows()
+}
 scorer = SentenceScorer(CONTRACTIONS_PATH)
+
 
 # -----------------------------
 def load_audio(audio_path, target_sr=16000, channel="both"):
@@ -48,6 +54,7 @@ def load_audio(audio_path, target_sr=16000, channel="both"):
         waveform = torchaudio.transforms.Resample(sr, target_sr)(waveform)
     return waveform, target_sr
 
+
 def clean_token(token):
     token = token.replace("Ġ", "")
     token = re.sub(r"[^\w']", "", token)
@@ -55,9 +62,13 @@ def clean_token(token):
 
 
 @torch.no_grad()
-def predict_word_probs(model, processor, audio_path, channel="both", is_english_only=False, device="cpu"):
+def predict_word_probs(
+    model, processor, audio_path, channel="both", is_english_only=False, device="cpu"
+):
     audio, sr = load_audio(audio_path, channel=channel)
-    inputs = processor(audio.numpy(), sampling_rate=sr, return_tensors="pt", return_attention_mask=True)
+    inputs = processor(
+        audio.numpy(), sampling_rate=sr, return_tensors="pt", return_attention_mask=True
+    )
     input_features = inputs.input_features.to(device)
     attention_mask = inputs.attention_mask.to(device)
 
@@ -83,7 +94,7 @@ def predict_word_probs(model, processor, audio_path, channel="both", is_english_
     outputs = model(
         encoder_outputs=model.get_encoder()(input_features),
         decoder_input_ids=decoder_input_ids,
-        attention_mask=attention_mask
+        attention_mask=attention_mask,
     )
 
     logits = outputs.logits
@@ -99,7 +110,7 @@ def predict_word_probs(model, processor, audio_path, channel="both", is_english_
     for tok, p in zip(raw_tokens, token_probs):
         if tok.startswith("Ġ") and current_tokens:
             word_str = "".join(clean_token(t) for t in current_tokens)
-            avg_prob = sum(current_probs)/len(current_probs)
+            avg_prob = sum(current_probs) / len(current_probs)
             if word_str in CONTRACTIONS:
                 for w in CONTRACTIONS[word_str]:
                     words.append(w)
@@ -115,7 +126,7 @@ def predict_word_probs(model, processor, audio_path, channel="both", is_english_
 
     if current_tokens:
         word_str = "".join(clean_token(t) for t in current_tokens[:-1])
-        avg_prob = sum(current_probs)/len(current_probs)
+        avg_prob = sum(current_probs) / len(current_probs)
         if word_str in CONTRACTIONS:
             for w in CONTRACTIONS[word_str]:
                 words.append(w)
@@ -128,7 +139,9 @@ def predict_word_probs(model, processor, audio_path, channel="both", is_english_
     return dict(zip(words[1:], word_probs[1:])), hypothesis
 
 
-def process_csv_with_model(csv_path, base_dir, model_name, channel="both", is_train=True):
+def process_csv_with_model(
+    csv_path, base_dir, model_name, channel="both", is_train=True
+):
     print(f"\nProcessing {csv_path} with model {model_name} (channel={channel}) ...")
     df = pd.read_csv(csv_path)
     column_name = f"{model_name.split('/')[-1][8:]}"
@@ -144,12 +157,14 @@ def process_csv_with_model(csv_path, base_dir, model_name, channel="both", is_tr
 
     for signal, group in tqdm(df.groupby("signal"), desc=f"{model_name} signals"):
         audio_path = f"{base_dir}/{signal}.flac"
-        reference = str(group['prompt'].values[0])
+        reference = str(group["prompt"].values[0])
         word_prob_dict, hypothesis = predict_word_probs(
-            model, processor, audio_path,
+            model,
+            processor,
+            audio_path,
             channel=channel,
             is_english_only=is_english_only,
-            device=device
+            device=device,
         )
 
         # update word-level probabilities
@@ -164,7 +179,7 @@ def process_csv_with_model(csv_path, base_dir, model_name, channel="both", is_tr
         sentence_score = results.hits / total_words if total_words > 0 else 0.0
 
         # handle SENTENCE_SCORE row
-        score_row_idx = group.index[group['word'] == "SENTENCE_SCORE"].tolist()
+        score_row_idx = group.index[group["word"] == "SENTENCE_SCORE"].tolist()
         if score_row_idx:
             # update existing row
             df.at[score_row_idx[0], column_name] = sentence_score
@@ -173,18 +188,20 @@ def process_csv_with_model(csv_path, base_dir, model_name, channel="both", is_tr
             new_row = {
                 "signal": signal,
                 "prompt": reference,
-                "hearing_loss": group['hearing_loss'].values[0],
+                "hearing_loss": group["hearing_loss"].values[0],
                 "word": "SENTENCE_SCORE",
                 "word_count": 0,
-                column_name: sentence_score
+                column_name: sentence_score,
             }
             if is_train:
-                new_row.update({
-                    "response": group['response'].values[0],
-                    "n_words": group['n_words'].values[0],
-                    "words_correct": group['words_correct'].values[0],
-                    "correctness": group['correctness'].values[0],
-                })
+                new_row.update(
+                    {
+                        "response": group["response"].values[0],
+                        "n_words": group["n_words"].values[0],
+                        "words_correct": group["words_correct"].values[0],
+                        "correctness": group["correctness"].values[0],
+                    }
+                )
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
     df.to_csv(csv_path, index=False)
@@ -195,9 +212,18 @@ def process_csv_with_model(csv_path, base_dir, model_name, channel="both", is_tr
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run Whisper inference over metadata CSVs.")
-    parser.add_argument("--config", default="feature_config.yaml", help="Path to YAML config (whisper section).")
-    parser.add_argument("--splits", help="Comma-separated splits to run (train,valid,eval). Overrides config.splits.")
+    parser = argparse.ArgumentParser(
+        description="Run Whisper inference over metadata CSVs."
+    )
+    parser.add_argument(
+        "--config",
+        default="feature_config.yaml",
+        help="Path to YAML config (whisper section).",
+    )
+    parser.add_argument(
+        "--splits",
+        help="Comma-separated splits to run (train,valid,eval). Overrides config.splits.",
+    )
     parser.add_argument(
         "--datasets",
         nargs="+",
@@ -237,7 +263,9 @@ def main():
         is_train = entry.get("is_train", entry.get("split") == "train")
         channel = entry.get("channel", "right")
         for model_name in models:
-            process_csv_with_model(csv_path, signal_dir, model_name, channel=channel, is_train=is_train)
+            process_csv_with_model(
+                csv_path, signal_dir, model_name, channel=channel, is_train=is_train
+            )
 
 
 if __name__ == "__main__":

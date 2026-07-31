@@ -37,7 +37,9 @@ def batch_pearson_corr(preds: torch.Tensor, targets: torch.Tensor) -> torch.Tens
     vx = preds - preds.mean()
     vy = targets - targets.mean()
     eps = 1e-8
-    corr = (vx * vy).sum() / (torch.sqrt((vx ** 2).sum()) * torch.sqrt((vy ** 2).sum()) + eps)
+    corr = (vx * vy).sum() / (
+        torch.sqrt((vx**2).sum()) * torch.sqrt((vy**2).sum()) + eps
+    )
     return corr
 
 
@@ -54,10 +56,16 @@ def build_model(cfg):
 
 def build_dataloaders(cfg):
     df_l, df_r = load_metadata(cfg.data.csv_path_l, cfg.data.csv_path_r)
-    train_signals, val_signals = split_signals_by_prompt(df_l, cfg.train.val_split, cfg.seed)
+    train_signals, val_signals = split_signals_by_prompt(
+        df_l, cfg.train.val_split, cfg.seed
+    )
 
-    train_dataset = SpeechDatasetDual(df_l, df_r, train_signals, feature_cols=cfg.data.feature_cols, train=True)
-    val_dataset = SpeechDatasetDual(df_l, df_r, val_signals, feature_cols=cfg.data.feature_cols, train=True)
+    train_dataset = SpeechDatasetDual(
+        df_l, df_r, train_signals, feature_cols=cfg.data.feature_cols, train=True
+    )
+    val_dataset = SpeechDatasetDual(
+        df_l, df_r, val_signals, feature_cols=cfg.data.feature_cols, train=True
+    )
 
     train_loader = DataLoader(
         train_dataset,
@@ -80,7 +88,15 @@ def train_one_epoch(model, dataloader, optimizer, device, corr_lambda: float):
     total_loss = 0.0
     n = 0
 
-    for feats_l, mask_l, feats_r, mask_r, hearing_labels, targets, _signal_ids in dataloader:
+    for (
+        feats_l,
+        mask_l,
+        feats_r,
+        mask_r,
+        hearing_labels,
+        targets,
+        _signal_ids,
+    ) in dataloader:
         feats_l, mask_l = feats_l.to(device), mask_l.to(device)
         feats_r, mask_r = feats_r.to(device), mask_r.to(device)
         hearing_labels, targets = hearing_labels.to(device), targets.to(device)
@@ -104,7 +120,15 @@ def evaluate(model, dataloader, device):
     model.eval()
     y_true_all, y_pred_all = [], []
     with torch.no_grad():
-        for feats_l, mask_l, feats_r, mask_r, hearing_labels, targets, _signal_ids in dataloader:
+        for (
+            feats_l,
+            mask_l,
+            feats_r,
+            mask_r,
+            hearing_labels,
+            targets,
+            _signal_ids,
+        ) in dataloader:
             feats_l, mask_l = feats_l.to(device), mask_l.to(device)
             feats_r, mask_r = feats_r.to(device), mask_r.to(device)
             hearing_labels, targets = hearing_labels.to(device), targets.to(device)
@@ -124,7 +148,9 @@ def save_train_log(log, path: Path):
 @hydra.main(version_base=None, config_path="checkpoints/final", config_name="config")
 def main(cfg):
     set_seed(cfg.seed)
-    device = torch.device(cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu")
+    device = torch.device(
+        cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu"
+    )
 
     save_dir = Path(cfg.train.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -141,7 +167,9 @@ def main(cfg):
 
     for epoch in range(1, cfg.train.epochs + 1):
         print(f"\nEpoch {epoch}/{cfg.train.epochs}")
-        train_loss = train_one_epoch(model, train_loader, optimizer, device, cfg.train.corr_lambda)
+        train_loss = train_one_epoch(
+            model, train_loader, optimizer, device, cfg.train.corr_lambda
+        )
         train_rmse = evaluate(model, train_loader, device)
         val_rmse = evaluate(model, val_loader, device)
         print(f"Train Loss: {train_loss:.6f} | Train RMSE: {train_rmse:.4f}")
@@ -152,7 +180,9 @@ def main(cfg):
         if val_rmse < best_val_rmse:
             best_val_rmse = val_rmse
             torch.save(model.state_dict(), best_model_path)
-            print(f"--> Saved new best model at epoch {epoch}, Val RMSE: {val_rmse:.4f}")
+            print(
+                f"--> Saved new best model at epoch {epoch}, Val RMSE: {val_rmse:.4f}"
+            )
 
     save_train_log(train_log, train_log_path)
     print(f"Train log saved: {train_log_path}")

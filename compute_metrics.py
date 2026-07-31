@@ -14,7 +14,7 @@ import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -28,17 +28,23 @@ os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 try:
     from pystoi import stoi as stoi_metric
 except ImportError as exc:  # pragma: no cover
-    raise ImportError("Missing dependency 'pystoi'. Install it with `pip install pystoi`.") from exc
+    raise ImportError(
+        "Missing dependency 'pystoi'. Install it with `pip install pystoi`."
+    ) from exc
 
 try:
     from pesq import pesq as pesq_metric
 except ImportError as exc:  # pragma: no cover
-    raise ImportError("Missing dependency 'pesq'. Install it with `pip install pesq`.") from exc
+    raise ImportError(
+        "Missing dependency 'pesq'. Install it with `pip install pesq`."
+    ) from exc
 
 try:
     import onnxruntime as ort
 except ImportError as exc:  # pragma: no cover
-    raise ImportError("Missing dependency 'onnxruntime'. Install it with `pip install onnxruntime`.") from exc
+    raise ImportError(
+        "Missing dependency 'onnxruntime'. Install it with `pip install onnxruntime`."
+    ) from exc
 
 TARGET_SAMPLE_RATE = 16_000
 MIN_REQUIRED_SAMPLES = TARGET_SAMPLE_RATE // 4
@@ -79,7 +85,9 @@ def load_audio_resample(path: Path, target_sr: int = TARGET_SAMPLE_RATE) -> np.n
     return audio.astype(np.float32)
 
 
-def _safe_stoi(clean: np.ndarray, degraded: Optional[np.ndarray], sr: int, extended: bool = False) -> Optional[float]:
+def _safe_stoi(
+    clean: np.ndarray, degraded: Optional[np.ndarray], sr: int, extended: bool = False
+) -> Optional[float]:
     if degraded is None:
         return None
     try:
@@ -88,7 +96,9 @@ def _safe_stoi(clean: np.ndarray, degraded: Optional[np.ndarray], sr: int, exten
         return None
 
 
-def _safe_pesq(clean: np.ndarray, degraded: Optional[np.ndarray], sr: int) -> Optional[float]:
+def _safe_pesq(
+    clean: np.ndarray, degraded: Optional[np.ndarray], sr: int
+) -> Optional[float]:
     if degraded is None:
         return None
     mode = "wb" if sr >= 16_000 else "nb"
@@ -98,7 +108,9 @@ def _safe_pesq(clean: np.ndarray, degraded: Optional[np.ndarray], sr: int) -> Op
         return None
 
 
-def compute_quality(signal_id: str, degraded_dir: Path, reference_dir: Path, channel: str) -> Dict[str, Optional[float]]:
+def compute_quality(
+    signal_id: str, degraded_dir: Path, reference_dir: Path, channel: str
+) -> Dict[str, Optional[float]]:
     metrics = {column: None for column in QUALITY_COLUMNS}
     degraded_path = degraded_dir / f"{signal_id}.flac"
     reference_path = reference_dir / f"{signal_id}_unproc.flac"
@@ -139,7 +151,9 @@ def compute_quality(signal_id: str, degraded_dir: Path, reference_dir: Path, cha
     degraded_np = np.ascontiguousarray(degraded_wave[channel_idx], dtype=np.float32)
 
     metrics["stoi"] = _safe_stoi(clean_np, degraded_np, TARGET_SAMPLE_RATE)
-    metrics["estoi"] = _safe_stoi(clean_np, degraded_np, TARGET_SAMPLE_RATE, extended=True)
+    metrics["estoi"] = _safe_stoi(
+        clean_np, degraded_np, TARGET_SAMPLE_RATE, extended=True
+    )
     metrics["pesq"] = _safe_pesq(clean_np, degraded_np, TARGET_SAMPLE_RATE)
     return metrics
 
@@ -192,7 +206,9 @@ def resolve_audio_path(base_dir: Path, signal_id: str) -> Optional[Path]:
     return None
 
 
-def compute_dnsmos(signal_id: str, audio_dir: Path, channel: str, model: DNSMOS) -> Dict[str, Optional[float]]:
+def compute_dnsmos(
+    signal_id: str, audio_dir: Path, channel: str, model: DNSMOS
+) -> Dict[str, Optional[float]]:
     metrics = {col: None for col in DNS_COLUMNS}
     audio_path = resolve_audio_path(audio_dir, signal_id)
     if audio_path is None:
@@ -230,7 +246,9 @@ def ensure_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
 
 def update_quality(config: DatasetConfig) -> None:
     if config.degraded_dir is None or config.reference_dir is None:
-        print(f"[SKIP] {config.name}: missing degraded/reference paths for quality metrics")
+        print(
+            f"[SKIP] {config.name}: missing degraded/reference paths for quality metrics"
+        )
         return
     if not config.csv_path.exists():
         print(f"[SKIP] {config.name}: missing CSV {config.csv_path}")
@@ -250,9 +268,13 @@ def update_quality(config: DatasetConfig) -> None:
         print(f"[SKIP] {config.name}: no signals")
         return
 
-    print(f"[INFO] {config.name}: computing STOI/eSTOI/PESQ for {len(signal_ids)} signals")
+    print(
+        f"[INFO] {config.name}: computing STOI/eSTOI/PESQ for {len(signal_ids)} signals"
+    )
     for signal_id in tqdm(signal_ids, desc=f"{config.name} quality"):
-        metrics = compute_quality(signal_id, config.degraded_dir, config.reference_dir, config.channel)
+        metrics = compute_quality(
+            signal_id, config.degraded_dir, config.reference_dir, config.channel
+        )
         mask = df["signal"] == signal_id
         for column, value in metrics.items():
             if value is not None:
@@ -297,11 +319,27 @@ def update_dns(config: DatasetConfig, model: DNSMOS) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Compute STOI/eSTOI/PESQ and DNSMOS and append to CSVs.")
-    parser.add_argument("--config", default="feature_config.yaml", help="Path to YAML config (metrics section).")
-    parser.add_argument("--datasets", nargs="+", help="Dataset names to process (default: all from config).")
-    parser.add_argument("--splits", help="Comma-separated splits to process (train,valid,eval).")
-    parser.add_argument("--quality", action="store_true", help="Compute quality metrics (STOI/eSTOI/PESQ).")
+    parser = argparse.ArgumentParser(
+        description="Compute STOI/eSTOI/PESQ and DNSMOS and append to CSVs."
+    )
+    parser.add_argument(
+        "--config",
+        default="feature_config.yaml",
+        help="Path to YAML config (metrics section).",
+    )
+    parser.add_argument(
+        "--datasets",
+        nargs="+",
+        help="Dataset names to process (default: all from config).",
+    )
+    parser.add_argument(
+        "--splits", help="Comma-separated splits to process (train,valid,eval)."
+    )
+    parser.add_argument(
+        "--quality",
+        action="store_true",
+        help="Compute quality metrics (STOI/eSTOI/PESQ).",
+    )
     parser.add_argument("--dns", action="store_true", help="Compute DNSMOS metrics.")
     return parser.parse_args()
 
@@ -317,8 +355,12 @@ def build_dataset_configs(raw_cfg: Dict) -> Dict[str, DatasetConfig]:
         cfg = DatasetConfig(
             name=entry["name"],
             csv_path=Path(entry["csv_path"]),
-            degraded_dir=Path(entry["degraded_dir"]) if entry.get("degraded_dir") else None,
-            reference_dir=Path(entry["reference_dir"]) if entry.get("reference_dir") else None,
+            degraded_dir=(
+                Path(entry["degraded_dir"]) if entry.get("degraded_dir") else None
+            ),
+            reference_dir=(
+                Path(entry["reference_dir"]) if entry.get("reference_dir") else None
+            ),
             audio_dir=Path(entry["audio_dir"]) if entry.get("audio_dir") else None,
             channel=entry.get("channel", "right"),
         )
@@ -333,7 +375,11 @@ def main():
     metrics_cfg = cfg.get("metrics", cfg)
     datasets_cfg = build_dataset_configs(cfg)
 
-    selected = args.datasets if args.datasets else metrics_cfg.get("default_datasets", list(datasets_cfg.keys()))
+    selected = (
+        args.datasets
+        if args.datasets
+        else metrics_cfg.get("default_datasets", list(datasets_cfg.keys()))
+    )
     if args.splits:
         allowed_splits = {s.strip() for s in args.splits.split(",") if s.strip()}
         filtered = []
@@ -358,7 +404,9 @@ def main():
     do_dns = args.dns or (not args.quality and not args.dns and cfg_dns)
 
     if do_dns:
-        dnsmos_model_path = Path(metrics_cfg.get("dnsmos_model", "code/sig_bak_ovr.onnx"))
+        dnsmos_model_path = Path(
+            metrics_cfg.get("dnsmos_model", "code/sig_bak_ovr.onnx")
+        )
         dnsmos_model = DNSMOS(dnsmos_model_path)
     else:
         dnsmos_model = None

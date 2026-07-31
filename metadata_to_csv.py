@@ -97,12 +97,14 @@ def check_word_counts(csv_path: Path) -> None:
     check_df["match"] = check_df["word_count_sum"] == check_df["n_words"]
     mismatch = check_df[~check_df["match"]]
     # (Optional) inspect mismatch if needed:
-    # if len(mismatch):
-    #     print(mismatch.head(20))
+    if len(mismatch):
+        print(mismatch.head(20))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert metadata JSON to left/right CSVs.")
+    parser = argparse.ArgumentParser(
+        description="Convert metadata JSON to left/right CSVs."
+    )
     parser.add_argument("--json", required=True, help="Path to input metadata JSON.")
     args = parser.parse_args()
 

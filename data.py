@@ -25,7 +25,9 @@ class SpeechDatasetDual(Dataset):
             sentence_row = df_signal[df_signal["word"] == "SENTENCE_SCORE"]
             word_rows = df_signal[df_signal["word"] != "SENTENCE_SCORE"]
             df_sorted = pd.concat([sentence_row, word_rows], axis=0)
-            feats = torch.tensor(df_sorted[self.feature_cols].values, dtype=torch.float32)
+            feats = torch.tensor(
+                df_sorted[self.feature_cols].values, dtype=torch.float32
+            )
             cls_token = torch.zeros((1, feats.shape[1]))
             hearing_token = torch.zeros((1, feats.shape[1]))
             feats = torch.cat([cls_token, hearing_token, feats], dim=0)
@@ -59,7 +61,14 @@ def collate_fn_dual(batch):
         if pad_len > 0:
             f = torch.cat([f, torch.zeros((pad_len, dim))], dim=0)
         padded_l.append(f)
-        mask_l.append(torch.cat([torch.ones(L, dtype=torch.bool), torch.zeros(pad_len, dtype=torch.bool)]))
+        mask_l.append(
+            torch.cat(
+                [
+                    torch.ones(L, dtype=torch.bool),
+                    torch.zeros(pad_len, dtype=torch.bool),
+                ]
+            )
+        )
 
     for f in feats_r:
         L = f.shape[0]
@@ -67,7 +76,14 @@ def collate_fn_dual(batch):
         if pad_len > 0:
             f = torch.cat([f, torch.zeros((pad_len, dim))], dim=0)
         padded_r.append(f)
-        mask_r.append(torch.cat([torch.ones(L, dtype=torch.bool), torch.zeros(pad_len, dtype=torch.bool)]))
+        mask_r.append(
+            torch.cat(
+                [
+                    torch.ones(L, dtype=torch.bool),
+                    torch.zeros(pad_len, dtype=torch.bool),
+                ]
+            )
+        )
 
     feats_l = torch.stack(padded_l)
     feats_r = torch.stack(padded_r)
@@ -94,7 +110,14 @@ def collate_fn_dual_infer(batch):
         if pad_len > 0:
             f = torch.cat([f, torch.zeros((pad_len, dim))], dim=0)
         padded_l.append(f)
-        mask_l.append(torch.cat([torch.ones(L, dtype=torch.bool), torch.zeros(pad_len, dtype=torch.bool)]))
+        mask_l.append(
+            torch.cat(
+                [
+                    torch.ones(L, dtype=torch.bool),
+                    torch.zeros(pad_len, dtype=torch.bool),
+                ]
+            )
+        )
 
     for f in feats_r:
         L = f.shape[0]
@@ -102,7 +125,14 @@ def collate_fn_dual_infer(batch):
         if pad_len > 0:
             f = torch.cat([f, torch.zeros((pad_len, dim))], dim=0)
         padded_r.append(f)
-        mask_r.append(torch.cat([torch.ones(L, dtype=torch.bool), torch.zeros(pad_len, dtype=torch.bool)]))
+        mask_r.append(
+            torch.cat(
+                [
+                    torch.ones(L, dtype=torch.bool),
+                    torch.zeros(pad_len, dtype=torch.bool),
+                ]
+            )
+        )
 
     feats_l = torch.stack(padded_l)
     feats_r = torch.stack(padded_r)
@@ -123,7 +153,9 @@ def load_metadata(csv_l: str, csv_r: str):
 def split_signals_by_prompt(df_l, val_size: float, seed: int):
     prompt_to_signals = df_l.groupby("prompt")["signal"].unique().to_dict()
     all_prompts = list(prompt_to_signals.keys())
-    train_prompts, val_prompts = train_test_split(all_prompts, test_size=val_size, random_state=seed)
+    train_prompts, val_prompts = train_test_split(
+        all_prompts, test_size=val_size, random_state=seed
+    )
 
     train_signals = []
     for prompt in train_prompts:

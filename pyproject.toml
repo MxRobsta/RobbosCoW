@@ -21,3 +21,8 @@ dependencies = [
     "tqdm>=4.70.0",
     "transformers>=5.14.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.1",
+]

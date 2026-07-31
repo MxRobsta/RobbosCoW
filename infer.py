@@ -35,7 +35,9 @@ def batch_pearson_corr(preds: torch.Tensor, targets: torch.Tensor) -> torch.Tens
     vx = preds - preds.mean()
     vy = targets - targets.mean()
     eps = 1e-8
-    corr = (vx * vy).sum() / (torch.sqrt((vx ** 2).sum()) * torch.sqrt((vy ** 2).sum()) + eps)
+    corr = (vx * vy).sum() / (
+        torch.sqrt((vx**2).sum()) * torch.sqrt((vy**2).sum()) + eps
+    )
     return corr
 
 
@@ -52,7 +54,9 @@ def build_model(cfg):
 
 def build_infer_loader(df_l, df_r, feature_cols, batch_size):
     signals = collect_signals_by_prompt(df_l)
-    dataset = SpeechDatasetDual(df_l=df_l, df_r=df_r, signals=signals, feature_cols=feature_cols, train=False)
+    dataset = SpeechDatasetDual(
+        df_l=df_l, df_r=df_r, signals=signals, feature_cols=feature_cols, train=False
+    )
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn_dual_infer
     )
@@ -77,7 +81,15 @@ def run_inference(model, loader, device, clamp=True, scale_to_percentage=True):
     targets_list = []
 
     with torch.no_grad():
-        for feats_l, mask_l, feats_r, mask_r, hearing_labels, targets, signal_ids in loader:
+        for (
+            feats_l,
+            mask_l,
+            feats_r,
+            mask_r,
+            hearing_labels,
+            targets,
+            signal_ids,
+        ) in loader:
             feats_l, mask_l = feats_l.to(device), mask_l.to(device)
             feats_r, mask_r = feats_r.to(device), mask_r.to(device)
             hearing_labels = hearing_labels.to(device)
@@ -104,7 +116,9 @@ def write_predictions(path: Path, signal_ids, preds):
 @hydra.main(version_base=None, config_path="checkpoints/final", config_name="config")
 def main(cfg):
     set_seed(cfg.seed)
-    device = torch.device(cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu")
+    device = torch.device(
+        cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu"
+    )
 
     save_dir = Path(cfg.train.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -120,7 +134,9 @@ def main(cfg):
         csv_l, csv_r = get_split_paths(cfg, split)
         df_l, df_r = load_metadata(csv_l, csv_r)
         has_targets = "correctness" in df_l.columns
-        loader = build_infer_loader(df_l, df_r, cfg.data.feature_cols, cfg.train.batch_size)
+        loader = build_infer_loader(
+            df_l, df_r, cfg.data.feature_cols, cfg.train.batch_size
+        )
 
         preds_scaled, preds_out, signal_ids, targets = run_inference(
             model,

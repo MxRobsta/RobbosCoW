@@ -8,7 +8,9 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
@@ -31,12 +33,16 @@ class TransformerRegressorDual(nn.Module):
         encoder_layer_l = nn.TransformerEncoderLayer(
             d_model=d_model, nhead=nhead, dropout=dropout, batch_first=True
         )
-        self.transformer_l = nn.TransformerEncoder(encoder_layer_l, num_layers=num_layers)
+        self.transformer_l = nn.TransformerEncoder(
+            encoder_layer_l, num_layers=num_layers
+        )
 
         encoder_layer_r = nn.TransformerEncoderLayer(
             d_model=d_model, nhead=nhead, dropout=dropout, batch_first=True
         )
-        self.transformer_r = nn.TransformerEncoder(encoder_layer_r, num_layers=num_layers)
+        self.transformer_r = nn.TransformerEncoder(
+            encoder_layer_r, num_layers=num_layers
+        )
 
         self.fc_out = nn.Linear(d_model * 2, 1)
 

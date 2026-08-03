@@ -143,13 +143,23 @@ def predict_word_probs(
 
 
 def process_csv_with_model(
-    csv_path, base_dir, model_name, ftype, channel="both", is_train=True
+    csv_path,
+    base_dir,
+    model_name,
+    ftype,
+    overwrite: bool,
+    channel="both",
+    is_train=True,
 ):
     print(f"\nProcessing {csv_path} with model {model_name} (channel={channel}) ...")
     df = pd.read_csv(csv_path)
     column_name = f"{model_name.split('/')[-1][8:]}"
     if column_name not in df.columns:
         df[column_name] = 0.0
+    elif not overwrite:
+        print(
+            f"Results found for {model_name} in {csv_path} and overwriting is disabled. Skipping..."
+        )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     processor = WhisperProcessor.from_pretrained(model_name)
@@ -233,7 +243,13 @@ def main(cfg: DictConfig):
         csv_fpath = cfg.feature_csv.format(subset=subset, side=side)
         signal_dir = cfg.signal_dir.format(subset=subset)
         process_csv_with_model(
-            csv_fpath, signal_dir, model, cfg.dataset.ftype, side, subset == "train"
+            csv_fpath,
+            signal_dir,
+            model,
+            cfg.dataset.ftype,
+            cfg.overwrite,
+            side,
+            subset == "train",
         )
 
     # selected = []

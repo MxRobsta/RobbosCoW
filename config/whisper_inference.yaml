@@ -7,6 +7,8 @@ sides: [left, right]
 feature_csv: ${dataset.feature_csv}
 signal_dir: ${dataset.signal_dir}
 
+overwrite: False
+
 whisper:
   - openai/whisper-tiny
   - openai/whisper-tiny.en

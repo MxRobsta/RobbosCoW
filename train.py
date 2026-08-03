@@ -173,7 +173,7 @@ def main(cfg):
         cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu"
     )
 
-    save_dir = Path(cfg.train.save_dir)
+    save_dir = Path(cfg.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(cfg).to(device)
@@ -207,8 +207,7 @@ def main(cfg):
                 f"--> Saved new best model at epoch {epoch}, Val RMSE: {val_rmse:.4f}"
             )
 
-    save_train_log(train_log, train_log_path)
-    print(f"Train log saved: {train_log_path}")
+        save_train_log(train_log, train_log_path)
 
 
 if __name__ == "__main__":

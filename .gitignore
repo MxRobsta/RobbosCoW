@@ -6,6 +6,9 @@ slurm/logs
 hydra
 !config/hydra
 asr_outputs/*debug
+checkpoints/*
+!checkpoints/final
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

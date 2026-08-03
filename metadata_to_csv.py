@@ -67,7 +67,7 @@ def get_severity(lid: str, listeners: dict, thresholds: dict):
     return "Severe"
 
 
-def clip1(
+def data_to_csv(
     data: Iterable[dict],
     csv_path: Path,
     sig_key: str = "signal",
@@ -153,7 +153,7 @@ def main(cfg: DictConfig):
                 data = json.load(f)
 
             csv_fpath.parent.mkdir(parents=True, exist_ok=True)
-            clip1(data, csv_fpath)
+            data_to_csv(data, csv_fpath)
         elif cfg.dataset.name == "cpc3":
             if subset == "valid":
                 subset = "dev"
@@ -163,7 +163,7 @@ def main(cfg: DictConfig):
                 with open(json_path, "r") as f:
                     data = json.load(f)
 
-                clip1(data, csv_fpath, "signal_encoded")
+                data_to_csv(data, csv_fpath, "signal_encoded")
             else:
                 json_path = Path(cfg.input_fpath.format(subset=subset))
 
@@ -173,7 +173,9 @@ def main(cfg: DictConfig):
                 with open(cfg.dataset.listeners_fpath, "r") as f:
                     listeners = json.load(f)
 
-                clip1(data, csv_fpath, "signal", listeners, cfg.dataset.hl_thresholds)
+                data_to_csv(
+                    data, csv_fpath, "signal", listeners, cfg.dataset.hl_thresholds
+                )
 
         print(f"CSV saved to {csv_fpath}")
 

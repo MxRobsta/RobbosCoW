@@ -143,15 +143,13 @@ def main(cfg: DictConfig):
     for subset, side in product(subsets, sides):
 
         # Derive base paths for left/right outputs
-        csv_fpath = Path(cfg.output_fpath.format(subset=subset, side=side))
-        csv_fpath.parent.mkdir(exist_ok=True, parents=True)
 
         if cfg.dataset.name == "clip1":
             json_path = Path(cfg.input_fpath.format(subset=subset))
 
             with json_path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
-
+            csv_fpath = Path(cfg.output_fpath.format(subset=subset, side=side))
             csv_fpath.parent.mkdir(parents=True, exist_ok=True)
             data_to_csv(data, csv_fpath)
         elif cfg.dataset.name == "cpc3":
@@ -163,6 +161,8 @@ def main(cfg: DictConfig):
                 with open(json_path, "r") as f:
                     data = json.load(f)
 
+                csv_fpath = Path(cfg.output_fpath.format(subset=subset, side=side))
+                csv_fpath.parent.mkdir(exist_ok=True, parents=True)
                 data_to_csv(data, csv_fpath, "signal_encoded")
             else:
                 json_path = Path(cfg.input_fpath.format(subset=subset))
@@ -173,6 +173,8 @@ def main(cfg: DictConfig):
                 with open(cfg.dataset.listeners_fpath, "r") as f:
                     listeners = json.load(f)
 
+                csv_fpath = Path(cfg.output_fpath.format(subset=subset, side=side))
+                csv_fpath.parent.mkdir(exist_ok=True, parents=True)
                 data_to_csv(
                     data, csv_fpath, "signal", listeners, cfg.dataset.hl_thresholds
                 )

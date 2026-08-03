@@ -2,4 +2,6 @@ name: clip1
 
 feature_csv: features/${dataset.name}/{subset}.features.{side}.csv
 metadata_fpath: data/${dataset.name}/metadata/{subset}_metadata_with_phoneme.json
-signal_fpath: data/${dataset.name}/{subset}/signals/{signal_id}.wav
+signal_dir: data/${dataset.name}/{subset}/signals
+
+ftype: flac

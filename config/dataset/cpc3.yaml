@@ -2,7 +2,9 @@ name: cpc3
 
 feature_csv: features/${dataset.name}/{subset}.features.{side}.csv
 metadata_fpath: data/clarity_CPC3_data/clarity_data/metadata/CPC3.{subset}.json
-signal_fpath: data/clarity_CPC3_data/clarity_data/{subset}/signals/{signal_id}.wav
+signal_dir: data/clarity_CPC3_data/clarity_data/{subset}/signals
+
+ftype: wav
 
 listeners_fpath: data/clarity_CPC2_data/clarity_data/metadata/listeners.json
 

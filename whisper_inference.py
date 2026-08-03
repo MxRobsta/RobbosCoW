@@ -6,9 +6,12 @@ import re
 from tqdm import tqdm
 import warnings
 from transcription_scorer import SentenceScorer
-import yaml
 from pathlib import Path
 import soundfile as sf
+
+import hydra
+from itertools import product
+from omegaconf import DictConfig
 
 warnings.filterwarnings("ignore")
 
@@ -140,7 +143,7 @@ def predict_word_probs(
 
 
 def process_csv_with_model(
-    csv_path, base_dir, model_name, channel="both", is_train=True
+    csv_path, base_dir, model_name, ftype, channel="both", is_train=True
 ):
     print(f"\nProcessing {csv_path} with model {model_name} (channel={channel}) ...")
     df = pd.read_csv(csv_path)
@@ -156,7 +159,7 @@ def process_csv_with_model(
     is_english_only = model_name.endswith(".en")
 
     for signal, group in tqdm(df.groupby("signal"), desc=f"{model_name} signals"):
-        audio_path = f"{base_dir}/{signal}.flac"
+        audio_path = f"{base_dir}/{signal}.{ftype}"
         reference = str(group["prompt"].values[0])
         word_prob_dict, hypothesis = predict_word_probs(
             model,
@@ -209,63 +212,51 @@ def process_csv_with_model(
 
 
 # -----------------------------
-def main():
-    import argparse
+@hydra.main(version_base=None, config_path="config", config_name="whisper_inference")
+def main(cfg: DictConfig):
 
-    parser = argparse.ArgumentParser(
-        description="Run Whisper inference over metadata CSVs."
-    )
-    parser.add_argument(
-        "--config",
-        default="feature_config.yaml",
-        help="Path to YAML config (whisper section).",
-    )
-    parser.add_argument(
-        "--splits",
-        help="Comma-separated splits to run (train,valid,eval). Overrides config.splits.",
-    )
-    parser.add_argument(
-        "--datasets",
-        nargs="+",
-        help="Dataset names to run (defaults to all datasets whose split is selected).",
-    )
-    parser.add_argument(
-        "--channel",
-        choices=["left", "right"],
-        help="Filter datasets by channel (left/right). If omitted, uses dataset channel.",
-    )
-    args = parser.parse_args()
+    subsets = cfg.subsets
+    if isinstance(subsets, str):
+        subsets = [subsets]
 
-    cfg_raw = yaml.safe_load(open(args.config, "r", encoding="utf-8"))
-    cfg = cfg_raw.get("whisper", {})
-    splits = cfg.get("splits", ["eval"])
-    if args.splits:
-        splits = [s.strip() for s in args.splits.split(",") if s.strip()]
+    models = cfg.whisper
+    sides = cfg.sides
+    if isinstance(sides, str):
+        sides = [sides]
 
-    models = cfg["models"]
-    datasets = cfg_raw.get("datasets", [])
-    channel_filter = args.channel
-    selected = []
-    for entry in datasets:
-        if entry.get("split") not in splits:
-            continue
-        entry_channel = entry.get("channel", "right")
-        if channel_filter and entry_channel != channel_filter:
-            continue
-        selected.append(entry)
-    if args.datasets:
-        allowed = set(args.datasets)
-        selected = [e for e in selected if e.get("name") in allowed]
+    for model, subset, side in product(models, subsets, sides):
+        if cfg.dataset.name == "cpc3" and subset == "valid":
+            # Fix naming conventions for dev/valid
+            subset = "dev"
 
-    for entry in selected:
-        csv_path = entry["csv_path"]
-        signal_dir = entry["signal_dir"]
-        is_train = entry.get("is_train", entry.get("split") == "train")
-        channel = entry.get("channel", "right")
-        for model_name in models:
-            process_csv_with_model(
-                csv_path, signal_dir, model_name, channel=channel, is_train=is_train
-            )
+        print(f"Processing {cfg.dataset.name}-{subset}, {side} side with {model}")
+        csv_fpath = cfg.feature_csv.format(subset=subset, side=side)
+        signal_dir = cfg.signal_dir.format(subset=subset)
+        process_csv_with_model(
+            csv_fpath, signal_dir, model, cfg.dataset.ftype, side, subset == "train"
+        )
+
+    # selected = []
+    # for entry in datasets:
+    #     if entry.get("split") not in subsets:
+    #         continue
+    #     entry_channel = entry.get("channel", "right")
+    #     if channel_filter and entry_channel != channel_filter:
+    #         continue
+    #     selected.append(entry)
+    # if args.datasets:
+    #     allowed = set(args.datasets)
+    #     selected = [e for e in selected if e.get("name") in allowed]
+
+    # for entry in selected:
+    #     csv_path = entry["csv_path"]
+    #     signal_dir = entry["signal_dir"]
+    #     is_train = entry.get("is_train", entry.get("split") == "train")
+    #     channel = entry.get("channel", "right")
+    #     for model_name in models:
+    #         process_csv_with_model(
+    #             csv_path, signal_dir, model_name, channel=channel, is_train=is_train
+    #         )
 
 
 if __name__ == "__main__":

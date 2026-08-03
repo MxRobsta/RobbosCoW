@@ -1,0 +1,35 @@
+defaults:
+  - dataset: clip1
+  - _self_
+
+subsets: [train, valid, eval]
+sides: [left, right]
+feature_csv: ${dataset.feature_csv}
+signal_dir: ${dataset.signal_dir}
+
+whisper:
+  - openai/whisper-tiny
+  - openai/whisper-tiny.en
+  - openai/whisper-base
+  - openai/whisper-base.en
+  - openai/whisper-small
+  - openai/whisper-small.en
+  - openai/whisper-medium
+  - openai/whisper-medium.en
+  - openai/whisper-large
+  - openai/whisper-large-v2
+  - openai/whisper-large-v3
+  - openai/whisper-large-v3-turbo
+
+metrics:
+  quality: true
+  dns: true
+  dnsmos_model: sig_bak_ovr.onnx
+  default_datasets:
+    - train_left
+    - train_right
+    - valid_left
+    - valid_right
+    - eval_left
+    - eval_right
+

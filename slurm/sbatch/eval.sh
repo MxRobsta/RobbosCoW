@@ -17,4 +17,8 @@ module load libsndfile
 module load FFmpeg
 export SSL_CERT_FILE="/etc/ssl/certs/ca-bundle.crt"
 
-apptainer exec container/env.sif uv run whisper_inference.py dataset=cpc3 subsets="$1"
+apptainer exec \
+    --nv \
+    --env SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    container/env.sif \
+    uv run whisper_inference.py dataset=cpc3 subsets="$1"

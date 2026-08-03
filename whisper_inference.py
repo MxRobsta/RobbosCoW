@@ -240,6 +240,7 @@ def main(cfg: DictConfig):
             subset = "dev"
 
         print(f"Processing {cfg.dataset.name}-{subset}, {side} side with {model}")
+        print(torch.cuda.is_available())
         csv_fpath = cfg.feature_csv.format(subset=subset, side=side)
         signal_dir = cfg.signal_dir.format(subset=subset)
         process_csv_with_model(

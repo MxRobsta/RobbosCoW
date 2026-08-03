@@ -9,6 +9,7 @@ asr_outputs/*debug
 checkpoints/*
 !checkpoints/final
 outputs
+container/*.sif
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

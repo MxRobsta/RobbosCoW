@@ -1,0 +1,36 @@
+Bootstrap: docker
+From: python:3.13-slim
+
+%post
+    set -eux
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+        git \
+        libgl1 \
+        libglib2.0-0 \
+        ffmpeg \
+        libsndfile1
+
+    rm -rf /var/lib/apt/lists/*
+
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+
+    mkdir -p /app
+    cd /app
+
+    export UV_NO_CACHE=true
+    export UV_CACHE_DIR=/tmp/uv-cache
+    git config --global --add safe.directory '*'
+        
+    uv sync --locked
+
+%files
+    pyproject.toml /app/
+    uv.lock /app/
+
+%environment
+    export UV_PROJECT_ENVIRONMENT=/app/.venv
+    export UV_CACHE_DIR=/tmp/uv-cache

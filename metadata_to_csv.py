@@ -1,6 +1,9 @@
-import argparse
 import csv
+import hydra
+from itertools import product
 import json
+import numpy as np
+from omegaconf import DictConfig
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
@@ -53,7 +56,24 @@ def process_prompt(prompt: str) -> Tuple[str, List[Tuple[str, int]], int]:
     return prompt_clean, words, total_count
 
 
-def save_to_csv(data: Iterable[dict], csv_path: Path) -> None:
+def get_severity(lid: str, listeners: dict, thresholds: dict):
+    left = np.mean(listeners[lid]["audiogram_levels_l"])
+    right = np.mean(listeners[lid]["audiogram_levels_r"])
+    best = min(left, right)
+
+    for th in thresholds:
+        if best >= th["low"] and best < th["high"]:
+            return th["name"]
+    return "Severe"
+
+
+def clip1(
+    data: Iterable[dict],
+    csv_path: Path,
+    sig_key: str = "signal",
+    listeners: dict = None,
+    thresholds: dict = None,
+) -> None:
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         header = [
@@ -71,17 +91,24 @@ def save_to_csv(data: Iterable[dict], csv_path: Path) -> None:
 
         for entry in data:
             prompt_clean, words, _ = process_prompt(entry["prompt"])
+
+            if "hearing_loss" not in entry and listeners is not None:
+                _, _, _, listener = entry[sig_key].split("_")
+                hearing_loss = get_severity(listener, listeners, thresholds)
+            else:
+                hearing_loss = entry.get("hearing_loss", "")
+
             for word, word_count in words:
                 word_clean = word.replace("\u2019", "'")
                 writer.writerow(
                     [
-                        entry["signal"],
+                        entry[sig_key],
                         prompt_clean,
                         entry.get("response", ""),
                         entry["n_words"],
                         entry.get("words_correct", ""),
                         entry.get("correctness", ""),
-                        entry.get("hearing_loss", ""),
+                        hearing_loss,
                         word_clean,
                         word_count,
                     ]
@@ -101,31 +128,56 @@ def check_word_counts(csv_path: Path) -> None:
         print(mismatch.head(20))
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Convert metadata JSON to left/right CSVs."
-    )
-    parser.add_argument("--json", required=True, help="Path to input metadata JSON.")
-    args = parser.parse_args()
+@hydra.main(version_base=None, config_path="config", config_name="json_to_csv")
+def main(cfg: DictConfig):
+    # Get the splits to work on
+    subsets = cfg.subsets
+    if isinstance(subsets, str):
+        subsets = [subsets]
 
-    json_path = Path(args.json)
-    with json_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    sides = cfg.sides
+    if isinstance(sides, str):
+        sides = [sides]
 
-    # Derive base paths for left/right outputs
-    base = json_path.with_suffix("")
-    csv_left = base.with_name(base.name + "_l.csv")
-    csv_right = base.with_name(base.name + "_r.csv")
+    # Iterate over all possibilities
+    for subset, side in product(subsets, sides):
 
-    csv_left.parent.mkdir(parents=True, exist_ok=True)
-    csv_right.parent.mkdir(parents=True, exist_ok=True)
+        # Derive base paths for left/right outputs
+        csv_fpath = Path(cfg.output_fpath.format(subset=subset, side=side))
+        csv_fpath.parent.mkdir(exist_ok=True, parents=True)
 
-    save_to_csv(data, csv_left)
-    save_to_csv(data, csv_right)
-    print(f"CSV saved to {csv_left} and {csv_right}")
+        if cfg.dataset.name == "clip1":
+            json_path = Path(cfg.input_fpath.format(subset=subset))
 
-    check_word_counts(csv_left)
-    check_word_counts(csv_right)
+            with json_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            csv_fpath.parent.mkdir(parents=True, exist_ok=True)
+            clip1(data, csv_fpath)
+        elif cfg.dataset.name == "cpc3":
+            if subset == "valid":
+                subset = "dev"
+            if subset in ["dev", "eval"]:
+                json_path = Path(cfg.input_fpath.format(subset=subset + "_full"))
+
+                with open(json_path, "r") as f:
+                    data = json.load(f)
+
+                clip1(data, csv_fpath, "signal_encoded")
+            else:
+                json_path = Path(cfg.input_fpath.format(subset=subset))
+
+                with open(json_path, "r") as f:
+                    data = json.load(f)
+
+                with open(cfg.dataset.listeners_fpath, "r") as f:
+                    listeners = json.load(f)
+
+                clip1(data, csv_fpath, "signal", listeners, cfg.dataset.hl_thresholds)
+
+        print(f"CSV saved to {csv_fpath}")
+
+        # check_word_counts(csv_fpath)
 
 
 if __name__ == "__main__":

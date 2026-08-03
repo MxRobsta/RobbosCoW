@@ -1,0 +1,9 @@
+defaults:
+  - dataset: clip1
+  - _self_
+
+subsets: [train, valid, eval]
+sides: [left, right]
+
+input_fpath: ${dataset.metadata_fpath}
+output_fpath: ${dataset.feature_csv}

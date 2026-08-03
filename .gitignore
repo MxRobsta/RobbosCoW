@@ -8,7 +8,7 @@ hydra
 asr_outputs/*debug
 checkpoints/*
 !checkpoints/final
-
+outputs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

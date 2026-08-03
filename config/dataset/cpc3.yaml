@@ -1,0 +1,21 @@
+name: cpc3
+
+feature_csv: features/${dataset.name}/{subset}.features.{side}.csv
+metadata_fpath: data/clarity_CPC3_data/clarity_data/metadata/CPC3.{subset}.json
+signal_fpath: data/clarity_CPC3_data/clarity_data/{subset}/signals/{signal_id}.wav
+
+listeners_fpath: data/clarity_CPC2_data/clarity_data/metadata/listeners.json
+
+hl_thresholds:
+  - low: 0
+    high: 20
+    name: "No loss"
+  - low: 20
+    high: 35
+    name: "Mild"
+  - low: 35
+    high: 50
+    name: "Moderate"
+  - low: 50
+    high: 65
+    name: "Moderately severe"

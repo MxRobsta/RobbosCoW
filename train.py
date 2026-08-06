@@ -172,6 +172,7 @@ def main(cfg):
     device = torch.device(
         cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu"
     )
+    print(device)
 
     save_dir = Path(cfg.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -186,7 +187,7 @@ def main(cfg):
     best_model_path = save_dir / "model.pt"
     train_log_path = save_dir / "train_log.csv"
 
-    use_tqdm = cfg.debug or cfg.device == "cpu"
+    use_tqdm = cfg.debug or cfg.device == "cpu" or cfg.progress
 
     for epoch in range(1, cfg.train.epochs + 1):
         print(f"\nEpoch {epoch}/{cfg.train.epochs}")

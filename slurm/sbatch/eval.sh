@@ -12,9 +12,10 @@
 #SBATCH --mail-user=rwhsutherland1@sheffield.ac.uk
 #SBATCH --mail-type=ALL
 
-module load GCC
+module load GCC/14.3.0
 module load libsndfile
 module load FFmpeg
 export SSL_CERT_FILE="/etc/ssl/certs/ca-bundle.crt"
 
-uv run whisper_inference.py dataset=cpc3 subsets="$1"
+source .venv/bin/activate
+python3 whisper_inference.py dataset=cpc3 subsets="$1"

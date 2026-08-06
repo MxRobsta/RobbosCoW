@@ -31,12 +31,12 @@ data:
     - large-v2
     - large-v3
     - large-v3-turbo
-    - stoi
-    - estoi
-    - pesq
-    - dns_sig
-    - dns_bak
-    - dns_ovrl
+    # - stoi
+    # - estoi
+    # - pesq
+    # - dns_sig
+    # - dns_bak
+    # - dns_ovrl
 
 model:
   d_model: 64

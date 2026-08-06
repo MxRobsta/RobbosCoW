@@ -60,8 +60,8 @@ def build_dataloaders(cfg):
     if isinstance(cfg.datasets, list):
         raise NotImplementedError("Currently only accepting on a single dataset")
 
-    lpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="l")
-    rpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="r")
+    lpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="left")
+    rpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="right")
 
     df_l, df_r = load_metadata(lpath, rpath)
     train_signals, val_signals = split_signals_by_prompt(

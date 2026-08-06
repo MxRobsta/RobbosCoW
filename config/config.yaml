@@ -3,7 +3,7 @@ defaults:
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none
 
-exp_name: final
+exp_name: ???
 seed: 42
 device: cuda  # set to cpu to force CPU
 mode: train  # train or infer
@@ -12,8 +12,10 @@ debug: true
 scratch_dir: data/scratch
 save_dir: ${scratch_dir}/experiments/${exp_name}
 
+datasets: clip1
+
 data:
-  csv_path: ${scratch_dir}/probs/{dataset}.{subset}_metadata_{side}.csv
+  csv_path: ${dataset.feature_csv}
   feature_cols:
     - n_words
     - tiny

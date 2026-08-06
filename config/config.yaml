@@ -2,7 +2,7 @@ defaults:
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none
 
-exp_name: final
+exp_name: ???
 seed: 42
 device: cuda  # set to cpu to force CPU
 mode: train  # train or infer

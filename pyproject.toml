@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=2.5.1",
     "onnxruntime>=1.28.0",
     "pandas>=3.0.5",
+    "pesq>=0.0.4",
     "pystoi>=0.4.1",
     "pyyaml>=6.0.3",
     "scikit-learn>=1.9.0",

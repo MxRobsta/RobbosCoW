@@ -3,5 +3,6 @@ name: clip1
 feature_csv: features/${dataset.name}/{subset}.features.{side}.csv
 metadata_fpath: data/${dataset.name}/metadata/{subset}_metadata_with_phoneme.json
 signal_dir: data/${dataset.name}/{subset}/signals
+reference_dir: data/${dataset.name}/{subset}/unprocessed
 
 ftype: flac

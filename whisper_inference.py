@@ -227,7 +227,7 @@ def process_csv_with_model(
 
 
 # -----------------------------
-@hydra.main(version_base=None, config_path="config", config_name="whisper_inference")
+@hydra.main(version_base=None, config_path="config", config_name="feature_extraction")
 def main(cfg: DictConfig):
 
     subsets = cfg.subsets

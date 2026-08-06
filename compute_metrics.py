@@ -9,8 +9,10 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
+import hydra
+from itertools import product
 import math
+from omegaconf import DictConfig
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,10 +57,9 @@ DNS_COLUMNS = ["dns_sig", "dns_bak", "dns_ovrl"]
 @dataclass(frozen=True)
 class DatasetConfig:
     name: str
-    csv_path: Path
-    degraded_dir: Optional[Path]
+    feature_csv: Path
+    signal_dir: Optional[Path]
     reference_dir: Optional[Path]
-    audio_dir: Optional[Path]
     channel: str  # "left" or "right"
 
 
@@ -244,20 +245,20 @@ def ensure_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     return df
 
 
-def update_quality(config: DatasetConfig) -> None:
-    if config.degraded_dir is None or config.reference_dir is None:
+def update_quality(config: DatasetConfig, debug: bool) -> None:
+    if config.signal_dir is None or config.reference_dir is None:
         print(
             f"[SKIP] {config.name}: missing degraded/reference paths for quality metrics"
         )
         return
-    if not config.csv_path.exists():
-        print(f"[SKIP] {config.name}: missing CSV {config.csv_path}")
+    if not config.feature_csv.exists():
+        print(f"[SKIP] {config.name}: missing CSV {config.feature_csv}")
         return
-    if not config.degraded_dir.exists() or not config.reference_dir.exists():
+    if not config.signal_dir.exists() or not config.reference_dir.exists():
         print(f"[SKIP] {config.name}: missing audio dir(s) for quality metrics")
         return
 
-    df = pd.read_csv(config.csv_path)
+    df = pd.read_csv(config.feature_csv)
     if "signal" not in df.columns:
         print(f"[SKIP] {config.name}: 'signal' column not found")
         return
@@ -268,34 +269,37 @@ def update_quality(config: DatasetConfig) -> None:
         print(f"[SKIP] {config.name}: no signals")
         return
 
+    if debug:
+        signal_ids = signal_ids[:10]
+
     print(
         f"[INFO] {config.name}: computing STOI/eSTOI/PESQ for {len(signal_ids)} signals"
     )
     for signal_id in tqdm(signal_ids, desc=f"{config.name} quality"):
         metrics = compute_quality(
-            signal_id, config.degraded_dir, config.reference_dir, config.channel
+            signal_id, config.signal_dir, config.reference_dir, config.channel
         )
         mask = df["signal"] == signal_id
         for column, value in metrics.items():
             if value is not None:
                 df.loc[mask, column] = value
 
-    df.to_csv(config.csv_path, index=False)
-    print(f"[DONE] {config.name}: quality metrics saved to {config.csv_path}")
+    df.to_csv(config.feature_csv, index=False)
+    print(f"[DONE] {config.name}: quality metrics saved to {config.feature_csv}")
 
 
-def update_dns(config: DatasetConfig, model: DNSMOS) -> None:
-    if config.audio_dir is None:
-        print(f"[SKIP] {config.name}: missing audio_dir for DNSMOS")
+def update_dns(config: DatasetConfig, model: DNSMOS, debug: bool) -> None:
+    if config.signal_dir is None:
+        print(f"[SKIP] {config.name}: missing signal_dir for DNSMOS")
         return
-    if not config.csv_path.exists():
-        print(f"[SKIP] {config.name}: missing CSV {config.csv_path}")
+    if not config.feature_csv.exists():
+        print(f"[SKIP] {config.name}: missing CSV {config.feature_csv}")
         return
-    if not config.audio_dir.exists():
-        print(f"[SKIP] {config.name}: missing audio dir {config.audio_dir}")
+    if not config.signal_dir.exists():
+        print(f"[SKIP] {config.name}: missing audio dir {config.signal_dir}")
         return
 
-    df = pd.read_csv(config.csv_path)
+    df = pd.read_csv(config.feature_csv)
     if "signal" not in df.columns:
         print(f"[SKIP] {config.name}: 'signal' column not found")
         return
@@ -306,42 +310,19 @@ def update_dns(config: DatasetConfig, model: DNSMOS) -> None:
         print(f"[SKIP] {config.name}: no signals")
         return
 
+    if debug:
+        signal_ids = signal_ids[:10]
+
     print(f"[INFO] {config.name}: computing DNSMOS for {len(signal_ids)} signals")
     for signal_id in tqdm(signal_ids, desc=f"{config.name} dns"):
-        metrics = compute_dnsmos(signal_id, config.audio_dir, config.channel, model)
+        metrics = compute_dnsmos(signal_id, config.signal_dir, config.channel, model)
         mask = df["signal"] == signal_id
         for column, value in metrics.items():
             if value is not None:
                 df.loc[mask, column] = value
 
-    df.to_csv(config.csv_path, index=False)
-    print(f"[DONE] {config.name}: DNSMOS saved to {config.csv_path}")
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Compute STOI/eSTOI/PESQ and DNSMOS and append to CSVs."
-    )
-    parser.add_argument(
-        "--config",
-        default="feature_config.yaml",
-        help="Path to YAML config (metrics section).",
-    )
-    parser.add_argument(
-        "--datasets",
-        nargs="+",
-        help="Dataset names to process (default: all from config).",
-    )
-    parser.add_argument(
-        "--splits", help="Comma-separated splits to process (train,valid,eval)."
-    )
-    parser.add_argument(
-        "--quality",
-        action="store_true",
-        help="Compute quality metrics (STOI/eSTOI/PESQ).",
-    )
-    parser.add_argument("--dns", action="store_true", help="Compute DNSMOS metrics.")
-    return parser.parse_args()
+    df.to_csv(config.feature_csv, index=False)
+    print(f"[DONE] {config.name}: DNSMOS saved to {config.feature_csv}")
 
 
 def load_config(path: Path) -> Dict:
@@ -349,59 +330,45 @@ def load_config(path: Path) -> Dict:
         return yaml.safe_load(f)
 
 
-def build_dataset_configs(raw_cfg: Dict) -> Dict[str, DatasetConfig]:
+def build_dataset_configs(
+    raw_cfg: Dict, subsets: List[str], sides: List[str]
+) -> Dict[str, DatasetConfig]:
     datasets = {}
-    for entry in raw_cfg.get("datasets", []):
+
+    for sub, side in product(subsets, sides):
         cfg = DatasetConfig(
-            name=entry["name"],
-            csv_path=Path(entry["csv_path"]),
-            degraded_dir=(
-                Path(entry["degraded_dir"]) if entry.get("degraded_dir") else None
-            ),
-            reference_dir=(
-                Path(entry["reference_dir"]) if entry.get("reference_dir") else None
-            ),
-            audio_dir=Path(entry["audio_dir"]) if entry.get("audio_dir") else None,
-            channel=entry.get("channel", "right"),
+            name=f"{sub}.{side}",
+            feature_csv=Path(raw_cfg.feature_csv.format(subset=sub, side=side)),
+            signal_dir=Path(raw_cfg.signal_dir.format(subset=sub)),
+            reference_dir=Path(raw_cfg.reference_dir.format(subset=sub)),
+            channel=side,
         )
         datasets[cfg.name] = cfg
+
+    # for entry in raw_cfg.get("datasets", []):
+    #     cfg = DatasetConfig(
+    #         name=entry["name"],
+    #         csv_path=Path(entry["csv_path"]),
+    #         degraded_dir=(
+    #             Path(entry["degraded_dir"]) if entry.get("degraded_dir") else None
+    #         ),
+    #         reference_dir=(
+    #             Path(entry["reference_dir"]) if entry.get("reference_dir") else None
+    #         ),
+    #         audio_dir=Path(entry["audio_dir"]) if entry.get("audio_dir") else None,
+    #         channel=entry.get("channel", "right"),
+    #     )
+    #     datasets[cfg.name] = cfg
     return datasets
 
 
-def main():
-    args = parse_args()
-    cfg_path = Path(args.config)
-    cfg = load_config(cfg_path)
+@hydra.main(version_base=None, config_path="config", config_name="feature_extraction")
+def main(cfg: DictConfig):
     metrics_cfg = cfg.get("metrics", cfg)
-    datasets_cfg = build_dataset_configs(cfg)
+    datasets_cfg = build_dataset_configs(cfg.dataset, cfg.subsets, cfg.sides)
 
-    selected = (
-        args.datasets
-        if args.datasets
-        else metrics_cfg.get("default_datasets", list(datasets_cfg.keys()))
-    )
-    if args.splits:
-        allowed_splits = {s.strip() for s in args.splits.split(",") if s.strip()}
-        filtered = []
-        for name in selected:
-            ds = datasets_cfg.get(name)
-            if ds is None:
-                continue
-            # infer split from name if not provided in config
-            split = None
-            if "train" in ds.name:
-                split = "train"
-            elif "valid" in ds.name:
-                split = "valid"
-            elif "eval" in ds.name:
-                split = "eval"
-            if split is None or split in allowed_splits:
-                filtered.append(name)
-        selected = filtered
-    cfg_quality = metrics_cfg.get("quality", True)
-    cfg_dns = metrics_cfg.get("dns", True)
-    do_quality = args.quality or (not args.quality and not args.dns and cfg_quality)
-    do_dns = args.dns or (not args.quality and not args.dns and cfg_dns)
+    do_quality = metrics_cfg.get("quality", True)
+    do_dns = metrics_cfg.get("dns", True)
 
     if do_dns:
         dnsmos_model_path = Path(
@@ -411,14 +378,11 @@ def main():
     else:
         dnsmos_model = None
 
-    for name in selected:
-        if name not in datasets_cfg:
-            raise ValueError(f"Dataset '{name}' not found in config.")
-        ds = datasets_cfg[name]
+    for ds in datasets_cfg.values():
         if do_quality:
-            update_quality(ds)
+            update_quality(ds, cfg.debug)
         if do_dns and dnsmos_model is not None:
-            update_dns(ds, dnsmos_model)
+            update_dns(ds, dnsmos_model, cfg.debug)
 
 
 if __name__ == "__main__":

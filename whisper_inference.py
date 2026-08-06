@@ -163,7 +163,7 @@ def process_csv_with_model(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     processor = WhisperProcessor.from_pretrained(model_name)
-    model = WhisperForConditionalGeneration.from_pretrained(model_name).to(device)
+    model = WhisperForConditionalGeneration.from_pretrained(model_name).to(device).to(torch.float)
     model.eval()
 
     is_english_only = model_name.endswith(".en")

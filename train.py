@@ -172,7 +172,6 @@ def main(cfg):
     device = torch.device(
         cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu"
     )
-    print(device)
 
     save_dir = Path(cfg.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)

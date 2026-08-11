@@ -69,10 +69,20 @@ def build_dataloaders(cfg):
     )
 
     train_dataset = SpeechDatasetDual(
-        df_l, df_r, train_signals, feature_cols=cfg.data.feature_cols, train=True
+        cfg.dataset.name,
+        df_l,
+        df_r,
+        train_signals,
+        feature_cols=cfg.data.feature_cols,
+        train=True,
     )
     val_dataset = SpeechDatasetDual(
-        df_l, df_r, val_signals, feature_cols=cfg.data.feature_cols, train=True
+        cfg.dataset.name,
+        df_l,
+        df_r,
+        val_signals,
+        feature_cols=cfg.data.feature_cols,
+        train=True,
     )
 
     if cfg.debug:
@@ -102,6 +112,8 @@ def train_one_epoch(
     total_loss = 0.0
     n = 0
 
+    y_true_all, y_pred_all = [], []
+
     if use_tqdm:
         dataloader = tqdm(dataloader, desc="Training")
 
@@ -130,7 +142,13 @@ def train_one_epoch(
         total_loss += loss.item() * targets.size(0)
         n += targets.size(0)
 
-    return total_loss / n
+        y_true_all.append(targets.cpu())
+        y_pred_all.append(preds.cpu())
+
+    y_true_all = torch.cat(y_true_all)
+    y_pred_all = torch.cat(y_pred_all)
+
+    return total_loss / n, compute_rmse(y_true_all, y_pred_all)
 
 
 def evaluate(model, dataloader, data_subset, device, use_tqdm):
@@ -190,10 +208,10 @@ def main(cfg):
 
     for epoch in range(1, cfg.train.epochs + 1):
         print(f"\nEpoch {epoch}/{cfg.train.epochs}")
-        train_loss = train_one_epoch(
+        train_loss, train_rmse = train_one_epoch(
             model, train_loader, optimizer, device, cfg.train.corr_lambda, use_tqdm
         )
-        train_rmse = evaluate(model, train_loader, "train", device, use_tqdm)
+        # train_rmse = evaluate(model, train_loader, "train", device, use_tqdm)
         val_rmse = evaluate(model, val_loader, "valid", device, use_tqdm)
         print(f"Train Loss: {train_loss:.6f} | Train RMSE: {train_rmse:.4f}")
         print(f"Val RMSE:   {val_rmse:.4f}")

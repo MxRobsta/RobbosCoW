@@ -5,12 +5,27 @@ from torch.utils.data import Dataset
 
 
 class SpeechDatasetDual(Dataset):
-    def __init__(self, df_l, df_r, signals, feature_cols, train=True):
+    def __init__(self, dataset_name, df_l, df_r, signals, feature_cols, train=True):
+        self.dataset_name = dataset_name
         self.df_l = df_l
         self.df_r = df_r
         self.signals = signals
         self.feature_cols = feature_cols
-        self.hearing_loss_map = {"No Loss": 0, "Mild": 1, "Moderate": 2}
+
+        hl_levels = self.df_l["hearing_loss"].unique()
+
+        if self.dataset_name.lower() == "cpc3":
+            self.hl_map = {"Mild": 0, "Moderate": 1, "Moderately severe": 2}
+            self.score_scalar = 0.01
+        elif self.dataset_name.lower() == "clip1":
+            self.hl_map = {"No Loss": 0, "Mild": 1, "Moderate": 2}
+            self.score_scalar = 1
+        else:
+            raise NotImplementedError(
+                f"Missing hearing loss map for some levels: {hl_levels}"
+            )
+        assert all([x in self.hl_map for x in hl_levels]), hl_levels
+
         self.train = train
 
     def __len__(self):
@@ -21,7 +36,7 @@ class SpeechDatasetDual(Dataset):
         df_signal_l = self.df_l[self.df_l["signal"] == signal_id]
         df_signal_r = self.df_r[self.df_r["signal"] == signal_id]
 
-        def process_df(df_signal):
+        def process_df(df_signal: pd.DataFrame):
             sentence_row = df_signal[df_signal["word"] == "SENTENCE_SCORE"]
             word_rows = df_signal[df_signal["word"] != "SENTENCE_SCORE"]
             df_sorted = pd.concat([sentence_row, word_rows], axis=0)
@@ -35,13 +50,14 @@ class SpeechDatasetDual(Dataset):
 
         feats_l = process_df(df_signal_l)
         feats_r = process_df(df_signal_r)
-        hearing_label = self.hearing_loss_map[df_signal_l["hearing_loss"].iloc[0]]
+
+        hearing_label = self.hl_map[df_signal_l["hearing_loss"].iloc[0]]
 
         if "correctness" in df_signal_l.columns:
             target_val = df_signal_l["correctness"].iloc[0]
         else:
             target_val = 0.0
-        target = torch.tensor(target_val, dtype=torch.float32)
+        target = torch.tensor(target_val * self.score_scalar, dtype=torch.float32)
 
         return feats_l, feats_r, hearing_label, target, signal_id
 

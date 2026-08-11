@@ -56,52 +56,99 @@ def build_model(cfg):
     )
 
 
-def build_dataloaders(cfg):
-    if isinstance(cfg.datasets, list):
-        raise NotImplementedError("Currently only accepting on a single dataset")
+def build_singledataset(
+    dataset_name,
+    val_split,
+    csv_path,
+    features,
+    seed,
+    debug,
+):
 
-    lpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="left")
-    rpath = cfg.data.csv_path.format(dataset=cfg.datasets, subset="train", side="right")
+    lpath = csv_path.format(dataset=dataset_name, subset="train", side="left")
+    rpath = csv_path.format(dataset=dataset_name, subset="train", side="right")
 
     df_l, df_r = load_metadata(lpath, rpath)
-    train_signals, val_signals = split_signals_by_prompt(
-        df_l, cfg.train.val_split, cfg.seed
-    )
+
+    if dataset_name == "cpc3":
+        df_l["correctness"] /= 100
+        df_r["correctness"] /= 100
+
+    train_signals, val_signals = split_signals_by_prompt(df_l, val_split, seed)
 
     train_dataset = SpeechDatasetDual(
-        cfg.dataset.name,
+        dataset_name,
         df_l,
         df_r,
         train_signals,
-        feature_cols=cfg.data.feature_cols,
+        feature_cols=features,
         train=True,
     )
     val_dataset = SpeechDatasetDual(
-        cfg.dataset.name,
+        dataset_name,
         df_l,
         df_r,
         val_signals,
-        feature_cols=cfg.data.feature_cols,
+        feature_cols=features,
         train=True,
     )
 
-    if cfg.debug:
+    if debug:
         train_dataset.signals = train_dataset.signals[:10]
         val_dataset.signals = val_dataset.signals[:10]
 
+    return train_dataset, val_dataset
+
+
+def build_multiloader(
+    dataset_name, val_split, csv_path, features, batch_size, seed, debug
+):
+    datasets = dataset_name.split("+")
+
+    train, val = {}, {}
+    for ds in datasets:
+        t, v = build_singledataset(ds, val_split, csv_path, features, seed, debug)
+        train[ds] = t
+        val[ds] = v
+
+    if len(datasets) == 1:
+        # Single dataset, just return it with a data loader
+        train_loader = DataLoader(
+            train[datasets[0]],
+            batch_size,
+            shuffle=True,
+            collate_fn=collate_fn_dual,
+        )
+        val[datasets[0]] = DataLoader(
+            val[datasets[0]],
+            batch_size,
+            shuffle=False,
+            collate_fn=collate_fn_dual,
+        )
+        return train_loader, val
+
+    # Multiple datasets - creating train
+    core = train[datasets[0]]  # type: SpeechDatasetDual
+    core.dataset_name = dataset_name
+    core.set_hl_levels()
+    for ds in datasets[1:]:
+        core.df_l = pd.concat([core.df_l, train[ds].df_l])
+        core.df_r = pd.concat([core.df_r, train[ds].df_r])
+        core.signals += train[ds].signals
+
     train_loader = DataLoader(
-        train_dataset,
-        batch_size=cfg.train.batch_size,
-        shuffle=True,
-        collate_fn=collate_fn_dual,
+        core, batch_size, shuffle=True, collate_fn=collate_fn_dual
     )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=cfg.train.batch_size,
-        shuffle=False,
-        collate_fn=collate_fn_dual,
-    )
-    return train_loader, val_loader
+
+    for ds in datasets:
+        val[ds] = DataLoader(
+            val[ds],
+            batch_size,
+            shuffle=False,
+            collate_fn=collate_fn_dual,
+        )
+
+    return train_loader, val
 
 
 def train_one_epoch(
@@ -196,12 +243,20 @@ def main(cfg):
 
     model = build_model(cfg).to(device)
 
-    train_loader, val_loader = build_dataloaders(cfg)
+    train_loader, val_loader = build_multiloader(
+        cfg.dataset.name,
+        cfg.train.val_split,
+        cfg.data.csv_path,
+        cfg.data.feature_cols,
+        cfg.train.batch_size,
+        cfg.seed,
+        cfg.debug,
+    )
+    print(val_loader)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.train.lr)
 
-    best_val_rmse = float("inf")
+    best_val_rmse = {v: float("inf") for v in val_loader.keys()}
     train_log = []
-    best_model_path = save_dir / "model.pt"
     train_log_path = save_dir / "train_log.csv"
 
     use_tqdm = cfg.debug or cfg.device == "cpu" or cfg.progress
@@ -211,21 +266,33 @@ def main(cfg):
         train_loss, train_rmse = train_one_epoch(
             model, train_loader, optimizer, device, cfg.train.corr_lambda, use_tqdm
         )
-        # train_rmse = evaluate(model, train_loader, "train", device, use_tqdm)
-        val_rmse = evaluate(model, val_loader, "valid", device, use_tqdm)
-        print(f"Train Loss: {train_loss:.6f} | Train RMSE: {train_rmse:.4f}")
-        print(f"Val RMSE:   {val_rmse:.4f}")
 
-        train_log.append([epoch, train_loss, train_rmse, val_rmse])
+        this_log = {"epoch": epoch, "train_loss": train_loss, "train_rmse": train_rmse}
+        for ds, loader in val_loader.items():
+            print(ds)
+            val_rmse = evaluate(model, loader, "valid", device, use_tqdm)
+            this_log[f"{ds}.val_rmse"] = val_rmse
 
-        if val_rmse < best_val_rmse:
-            best_val_rmse = val_rmse
-            torch.save(model.state_dict(), best_model_path)
-            print(
-                f"--> Saved new best model at epoch {epoch}, Val RMSE: {val_rmse:.4f}"
+            if val_rmse < best_val_rmse[ds]:
+                best_val_rmse[ds] = val_rmse
+                best_model_path = save_dir / f"{ds}.model.pt"
+                torch.save(model.state_dict(), best_model_path)
+
+        train_log.append(this_log)
+        pd.DataFrame(train_log).to_csv(train_log_path)
+
+        fstring = "{:<16}: {:>6.2f} | {:<16}: {:>6.2f}"
+        print(
+            fstring.format(
+                "Train RMSE",
+                this_log["train_rmse"],
+                "Train Loss",
+                this_log["train_loss"],
             )
-
-        save_train_log(train_log, train_log_path)
+        )
+        fstring = fstring.split("|")[0]
+        for ds in val_loader.keys():
+            print(fstring.format(f"Val {ds} RMSE", this_log[f"{ds}.val_rmse"]))
 
 
 if __name__ == "__main__":

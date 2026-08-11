@@ -1,4 +1,5 @@
 name: clip1
+n_hearing: 3
 
 feature_csv: features/${dataset.name}/{subset}.features.{side}.csv
 metadata_fpath: data/${dataset.name}/metadata/{subset}_metadata_with_phoneme.json

@@ -43,7 +43,7 @@ model:
   nhead: 4
   num_layers: 1
   dropout: 0.1
-  n_hearing: 3
+  n_hearing: ${dataset.n_hearing}
 
 train:
   batch_size: 1024

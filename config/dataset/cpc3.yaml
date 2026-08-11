@@ -1,4 +1,5 @@
 name: cpc3
+n_hearing: 3
 
 feature_csv: features/${dataset.name}/{subset}.features.{side}.csv
 metadata_fpath: data/clarity_CPC3_data/clarity_data/metadata/CPC3.{subset}.json

@@ -1,0 +1,24 @@
+name: cpc3+clip1
+n_hearing: 4
+
+feature_csv: features/{dataset}/{subset}.features.{side}.csv
+# metadata_fpath: data/clarity_CPC3_data/clarity_data/metadata/CPC3.{subset}.json
+# signal_dir: data/clarity_CPC3_data/clarity_data/{subset}/signals
+
+# ftype: wav
+
+# listeners_fpath: data/clarity_CPC2_data/clarity_data/metadata/listeners.json
+
+# hl_thresholds:
+#   - low: 0
+#     high: 20
+#     name: "No loss"
+#   - low: 20
+#     high: 35
+#     name: "Mild"
+#   - low: 35
+#     high: 50
+#     name: "Moderate"
+#   - low: 50
+#     high: 65
+#     name: "Moderately severe"

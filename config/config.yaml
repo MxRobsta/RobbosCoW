@@ -49,16 +49,18 @@ train:
   batch_size: 1024
   epochs: 100
   lr: 1e-4
+  optim: sam-sgd
   corr_lambda: 0.4
   val_split: 0.2
 
 infer:
+  ckpt_dataset: ${dataset.name}
   splits:
     - valid
     - eval
   clamp_scores: true
   scale_to_percentage: true
-  output_name: ${dataset.name}_{split}_inference.csv
+  output_name: ${dataset.name}_{split}_ckpt${infer.ckpt_dataset}.csv
 
 hydra:
   run:

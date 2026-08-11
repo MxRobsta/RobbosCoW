@@ -29,6 +29,13 @@ def compute_rmse(y_true, y_pred):
     return rmse.item()
 
 
+def compute_mae(y_true, y_pred):
+    y_true_100 = y_true * 100
+    y_pred_100 = y_pred * 100
+    mse = torch.mean((y_true_100 - y_pred_100).abs())
+    return mse.item()
+
+
 def batch_pearson_corr(preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     preds = preds.view(-1)
     targets = targets.view(-1)
@@ -86,6 +93,7 @@ def run_inference(model, loader, device, clamp=True, scale_to_percentage=True):
     preds_out_list = []
     signal_ids_list = []
     targets_list = []
+    n_words_list = []
 
     with torch.no_grad():
         for (
@@ -95,6 +103,7 @@ def run_inference(model, loader, device, clamp=True, scale_to_percentage=True):
             mask_r,
             hearing_labels,
             targets,
+            n_words,
             signal_ids,
         ) in loader:
             feats_l, mask_l = feats_l.to(device), mask_l.to(device)
@@ -109,8 +118,15 @@ def run_inference(model, loader, device, clamp=True, scale_to_percentage=True):
             preds_out_list.extend(preds_out.tolist())
             signal_ids_list.extend(signal_ids)
             targets_list.extend(targets.tolist())
+            n_words_list.extend(n_words.tolist())
 
-    return preds_scaled_list, preds_out_list, signal_ids_list, targets_list
+    return (
+        preds_scaled_list,
+        preds_out_list,
+        signal_ids_list,
+        targets_list,
+        n_words_list,
+    )
 
 
 def write_predictions(path: Path, signal_ids, preds):
@@ -130,10 +146,15 @@ def main(cfg):
     save_dir = Path(cfg.save_dir)
     # save_dir.mkdir(parents=True, exist_ok=True)
 
-    model = build_model(cfg).to(device)
-    checkpoint_path = save_dir / "model.pt"
+    checkpoint_path = save_dir / f"{cfg.infer.ckpt_dataset}.model.pt"
     state_dict = torch.load(checkpoint_path, map_location=device)
+
+    cfg.model.n_hearing = state_dict["hearing_embedding.weight"].shape[0]
+    model = build_model(cfg).to(device)
+
     model.load_state_dict(state_dict)
+
+    target_scalar = 0.01 if cfg.dataset.name == "cpc3" else 1
 
     splits = cfg.infer.get("splits", ["valid", "eval"])
     for split in splits:
@@ -145,7 +166,7 @@ def main(cfg):
             cfg.dataset.name, df_l, df_r, cfg.data.feature_cols, cfg.train.batch_size
         )
 
-        preds_scaled, preds_out, signal_ids, targets = run_inference(
+        preds_scaled, preds_out, signal_ids, targets, n_words = run_inference(
             model,
             loader,
             device,
@@ -154,11 +175,15 @@ def main(cfg):
         )
 
         if has_targets:
-            y_true = torch.tensor(targets, dtype=torch.float32)
+            y_true = torch.tensor(targets, dtype=torch.float32) * target_scalar
             y_pred = torch.tensor(preds_scaled, dtype=torch.float32)
+
             rmse = compute_rmse(y_true, y_pred)
             corr = batch_pearson_corr(y_pred, y_true).item()
+            mae = compute_mae(y_true, y_pred)
+
             print(f"{split} RMSE: {rmse:.4f}")
+            print(f"{split} MAE:  {mae:.4f}")
             print(f"{split} Pearson: {corr:.4f}")
         else:
             print(f"No targets available for split '{split}', skipping metrics.")

@@ -66,12 +66,13 @@ class SpeechDatasetDual(Dataset):
         else:
             target_val = 0.0
         target = torch.tensor(target_val, dtype=torch.float32)
+        n_words = torch.tensor(df_signal_l["n_words"].iloc[0], dtype=torch.int32)
 
-        return feats_l, feats_r, hearing_label, target, signal_id
+        return feats_l, feats_r, hearing_label, target, n_words, signal_id
 
 
 def collate_fn_dual(batch):
-    feats_l, feats_r, hearing_labels, targets, signal_ids = zip(*batch)
+    feats_l, feats_r, hearing_labels, targets, _, signal_ids = zip(*batch)
     max_len_l = max(f.shape[0] for f in feats_l)
     max_len_r = max(f.shape[0] for f in feats_r)
     dim = feats_l[0].shape[1]
@@ -120,7 +121,7 @@ def collate_fn_dual(batch):
 
 
 def collate_fn_dual_infer(batch):
-    feats_l, feats_r, hearing_labels, targets, signal_ids = zip(*batch)
+    feats_l, feats_r, hearing_labels, targets, n_words, signal_ids = zip(*batch)
     max_len_l = max(f.shape[0] for f in feats_l)
     max_len_r = max(f.shape[0] for f in feats_r)
     dim = feats_l[0].shape[1]
@@ -164,8 +165,18 @@ def collate_fn_dual_infer(batch):
     mask_r = torch.stack(mask_r)
     hearing_labels = torch.tensor(hearing_labels, dtype=torch.long)
     targets = torch.stack(targets)
+    n_words = torch.stack(n_words)
 
-    return feats_l, mask_l, feats_r, mask_r, hearing_labels, targets, list(signal_ids)
+    return (
+        feats_l,
+        mask_l,
+        feats_r,
+        mask_r,
+        hearing_labels,
+        targets,
+        n_words,
+        list(signal_ids),
+    )
 
 
 def load_metadata(csv_l: str, csv_r: str):

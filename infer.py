@@ -52,10 +52,15 @@ def build_model(cfg):
     )
 
 
-def build_infer_loader(df_l, df_r, feature_cols, batch_size):
+def build_infer_loader(dataset_name, df_l, df_r, feature_cols, batch_size):
     signals = collect_signals_by_prompt(df_l)
     dataset = SpeechDatasetDual(
-        df_l=df_l, df_r=df_r, signals=signals, feature_cols=feature_cols, train=False
+        dataset_name,
+        df_l=df_l,
+        df_r=df_r,
+        signals=signals,
+        feature_cols=feature_cols,
+        train=False,
     )
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn_dual_infer
@@ -64,13 +69,15 @@ def build_infer_loader(df_l, df_r, feature_cols, batch_size):
 
 
 def get_split_paths(cfg, split: str):
-    if split == "train":
-        return cfg.data.csv_path_l, cfg.data.csv_path_r
-    if split == "valid":
-        return cfg.data.valid_path_l, cfg.data.valid_path_r
-    if split == "eval":
-        return cfg.data.eval_path_l, cfg.data.eval_path_r
-    raise ValueError(f"Unsupported split: {split}")
+
+    if split in ["train", "eval"] or (split == "valid" and cfg.dataset.name == "clip1"):
+        left = cfg.data.csv_path.format(subset=split, side="left")
+        right = cfg.data.csv_path.format(subset=split, side="right")
+    else:
+        # CPC3 data calls it "dev" not "valid"
+        left = cfg.data.csv_path.format(subset="dev", side="left")
+        right = cfg.data.csv_path.format(subset="dev", side="right")
+    return left, right
 
 
 def run_inference(model, loader, device, clamp=True, scale_to_percentage=True):
@@ -113,15 +120,15 @@ def write_predictions(path: Path, signal_ids, preds):
     )
 
 
-@hydra.main(version_base=None, config_path="checkpoints/final", config_name="config")
+@hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
     set_seed(cfg.seed)
     device = torch.device(
         cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu"
     )
 
-    save_dir = Path(cfg.train.save_dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
+    save_dir = Path(cfg.save_dir)
+    # save_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(cfg).to(device)
     checkpoint_path = save_dir / "model.pt"
@@ -135,7 +142,7 @@ def main(cfg):
         df_l, df_r = load_metadata(csv_l, csv_r)
         has_targets = "correctness" in df_l.columns
         loader = build_infer_loader(
-            df_l, df_r, cfg.data.feature_cols, cfg.train.batch_size
+            cfg.dataset.name, df_l, df_r, cfg.data.feature_cols, cfg.train.batch_size
         )
 
         preds_scaled, preds_out, signal_ids, targets = run_inference(
@@ -156,7 +163,7 @@ def main(cfg):
         else:
             print(f"No targets available for split '{split}', skipping metrics.")
 
-        output_name = cfg.infer.output_name.get(split, f"{split}_inference.csv")
+        output_name = cfg.infer.output_name.format(split=split)
         submission_path = save_dir / output_name
         write_predictions(submission_path, signal_ids, preds_out)
         print(f"Inference CSV saved: {submission_path}")

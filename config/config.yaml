@@ -58,10 +58,7 @@ infer:
     - eval
   clamp_scores: true
   scale_to_percentage: true
-  output_name:
-    train: train_inference.csv
-    valid: valid_inference.csv
-    eval: eval_inference.csv
+  output_name: ${dataset.name}_{split}_inference.csv
 
 hydra:
   run:

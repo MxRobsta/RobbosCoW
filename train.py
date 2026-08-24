@@ -16,6 +16,8 @@ from data import (
     split_signals_by_prompt,
 )
 from model import TransformerRegressorDual
+from sam import SAM
+from WhiSQI.models.whisper_ni_predictors import cpcTransformer
 
 
 def set_seed(seed: int):
@@ -46,14 +48,20 @@ def batch_pearson_corr(preds: torch.Tensor, targets: torch.Tensor) -> torch.Tens
 
 
 def build_model(cfg):
-    return TransformerRegressorDual(
-        input_dim=len(cfg.data.feature_cols),
-        d_model=cfg.model.d_model,
-        nhead=cfg.model.nhead,
-        num_layers=cfg.model.num_layers,
-        dropout=cfg.model.dropout,
-        n_hearing=cfg.model.n_hearing,
-    )
+
+    if cfg.model.name == "scow":
+        return TransformerRegressorDual(
+            input_dim=len(cfg.data.feature_cols),
+            d_model=cfg.model.d_model,
+            nhead=cfg.model.nhead,
+            num_layers=cfg.model.num_layers,
+            dropout=cfg.model.dropout,
+            n_hearing=cfg.model.n_hearing,
+        )
+    elif cfg.model.name == "whisqi":
+        return cpcTransformer(model_type="multi")
+    else:
+        raise NotImplementedError(f"Couldn't recognise model {cfg.name}")
 
 
 def build_singledataset(
@@ -61,6 +69,9 @@ def build_singledataset(
     val_split,
     csv_path,
     features,
+    requires_audio,
+    audio_dir,
+    audio_ftype,
     seed,
     debug,
 ):
@@ -81,7 +92,10 @@ def build_singledataset(
         df_l,
         df_r,
         train_signals,
-        feature_cols=features,
+        features,
+        requires_audio,
+        audio_dir,
+        audio_ftype,
         train=True,
     )
     val_dataset = SpeechDatasetDual(
@@ -89,7 +103,10 @@ def build_singledataset(
         df_l,
         df_r,
         val_signals,
-        feature_cols=features,
+        features,
+        requires_audio,
+        audio_dir,
+        audio_ftype,
         train=True,
     )
 
@@ -101,13 +118,32 @@ def build_singledataset(
 
 
 def build_multiloader(
-    dataset_name, val_split, csv_path, features, batch_size, seed, debug
+    dataset_name,
+    val_split,
+    csv_path,
+    features,
+    requires_audio,
+    audio_dir,
+    audio_ftype,
+    batch_size,
+    seed,
+    debug,
 ):
     datasets = dataset_name.split("+")
 
     train, val = {}, {}
     for ds in datasets:
-        t, v = build_singledataset(ds, val_split, csv_path, features, seed, debug)
+        t, v = build_singledataset(
+            ds,
+            val_split,
+            csv_path,
+            features,
+            requires_audio,
+            audio_dir,
+            audio_ftype,
+            seed,
+            debug,
+        )
         train[ds] = t
         val[ds] = v
 
@@ -151,8 +187,35 @@ def build_multiloader(
     return train_loader, val
 
 
+def get_optimizer(
+    optim_name: str, model: torch.nn.Module, lr: float
+) -> torch.optim.Optimizer:
+    if "sam" in optim_name:
+        _, base_name = optim_name.split("-")
+        if base_name.lower() == "sgd":
+            base = torch.optim.SGD
+        else:
+            raise NotImplementedError(
+                f"Can't use {base_name} as base optimiser, add code here"
+            )
+        optimiser = SAM(model.parameters(), base, lr, momentum=0.9)
+        one_step = False
+    elif optim_name.lower() == "adamw":
+        optimiser = torch.optim.AdamW(model.parameters(), lr=lr)
+        one_step = True
+
+    return optimiser, one_step
+
+
 def train_one_epoch(
-    model, dataloader, optimizer, device, corr_lambda: float, use_tqdm: bool
+    model,
+    requires_audio,
+    dataloader,
+    optimiser,
+    one_step,
+    device,
+    corr_lambda: float,
+    use_tqdm: bool,
 ):
     model.train()
     mse_loss_fn = nn.MSELoss()
@@ -165,6 +228,7 @@ def train_one_epoch(
         dataloader = tqdm(dataloader, desc="Training")
 
     for (
+        audio,
         feats_l,
         mask_l,
         feats_r,
@@ -173,18 +237,37 @@ def train_one_epoch(
         targets,
         _signal_ids,
     ) in dataloader:
-        feats_l, mask_l = feats_l.to(device), mask_l.to(device)
-        feats_r, mask_r = feats_r.to(device), mask_r.to(device)
-        hearing_labels, targets = hearing_labels.to(device), targets.to(device)
+        if requires_audio:
+            preds = model(audio[:, 0, :])
+        else:
+            feats_l, mask_l = feats_l.to(device), mask_l.to(device)
+            feats_r, mask_r = feats_r.to(device), mask_r.to(device)
+            hearing_labels, targets = hearing_labels.to(device), targets.to(device)
 
-        preds = model(feats_l, mask_l, feats_r, mask_r, hearing_labels)
+            preds = model(feats_l, mask_l, feats_r, mask_r, hearing_labels)
+
         mse = mse_loss_fn(preds, targets)
         corr = batch_pearson_corr(preds, targets)
         loss = mse + corr_lambda * (1.0 - corr)
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        if one_step:
+            optimiser.zero_grad()
+            loss.backward()
+            optimiser.step()
+        else:
+            loss.backward()
+            optimiser.first_step(zero_grad=True)
+
+            if requires_audio:
+                preds = model(audio[:, 0, :])
+            else:
+                preds = model(feats_l, mask_l, feats_r, mask_r, hearing_labels)
+
+            mse = mse_loss_fn(preds, targets)
+            corr = batch_pearson_corr(preds, targets)
+            loss = mse + corr_lambda * (1.0 - corr)
+
+            optimiser.second_step(zero_grad=True)
 
         total_loss += loss.item() * targets.size(0)
         n += targets.size(0)
@@ -198,7 +281,7 @@ def train_one_epoch(
     return total_loss / n, compute_rmse(y_true_all, y_pred_all)
 
 
-def evaluate(model, dataloader, data_subset, device, use_tqdm):
+def evaluate(model, requires_audio, dataloader, data_subset, device, use_tqdm):
     model.eval()
     y_true_all, y_pred_all = [], []
 
@@ -207,6 +290,7 @@ def evaluate(model, dataloader, data_subset, device, use_tqdm):
 
     with torch.no_grad():
         for (
+            audio,
             feats_l,
             mask_l,
             feats_r,
@@ -215,10 +299,13 @@ def evaluate(model, dataloader, data_subset, device, use_tqdm):
             targets,
             _signal_ids,
         ) in dataloader:
-            feats_l, mask_l = feats_l.to(device), mask_l.to(device)
-            feats_r, mask_r = feats_r.to(device), mask_r.to(device)
-            hearing_labels, targets = hearing_labels.to(device), targets.to(device)
-            preds = model(feats_l, mask_l, feats_r, mask_r, hearing_labels)
+            if requires_audio:
+                preds = model(audio[:, 0, :])
+            else:
+                feats_l, mask_l = feats_l.to(device), mask_l.to(device)
+                feats_r, mask_r = feats_r.to(device), mask_r.to(device)
+                hearing_labels, targets = hearing_labels.to(device), targets.to(device)
+                preds = model(feats_l, mask_l, feats_r, mask_r, hearing_labels)
             y_true_all.append(targets.cpu())
             y_pred_all.append(preds.cpu())
     y_true_all = torch.cat(y_true_all)
@@ -242,18 +329,21 @@ def main(cfg):
     save_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(cfg).to(device)
+    requires_audio = cfg.model.requires_audio
 
     train_loader, val_loader = build_multiloader(
         cfg.dataset.name,
         cfg.train.val_split,
         cfg.data.csv_path,
         cfg.data.feature_cols,
+        cfg.model.requires_audio,
+        cfg.dataset.signal_dir.format(subset="train"),
+        cfg.dataset.ftype,
         cfg.train.batch_size,
         cfg.seed,
         cfg.debug,
     )
-    print(val_loader)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.train.lr)
+    optimiser, one_step = get_optimizer(cfg.train.optim, model, cfg.train.lr)
 
     best_val_rmse = {v: float("inf") for v in val_loader.keys()}
     train_log = []
@@ -264,13 +354,21 @@ def main(cfg):
     for epoch in range(1, cfg.train.epochs + 1):
         print(f"\nEpoch {epoch}/{cfg.train.epochs}")
         train_loss, train_rmse = train_one_epoch(
-            model, train_loader, optimizer, device, cfg.train.corr_lambda, use_tqdm
+            model,
+            requires_audio,
+            train_loader,
+            optimiser,
+            one_step,
+            device,
+            cfg.train.corr_lambda,
+            use_tqdm,
         )
 
         this_log = {"epoch": epoch, "train_loss": train_loss, "train_rmse": train_rmse}
         for ds, loader in val_loader.items():
-            print(ds)
-            val_rmse = evaluate(model, loader, "valid", device, use_tqdm)
+            val_rmse = evaluate(
+                model, requires_audio, loader, "valid", device, use_tqdm
+            )
             this_log[f"{ds}.val_rmse"] = val_rmse
 
             if val_rmse < best_val_rmse[ds]:

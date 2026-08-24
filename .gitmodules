@@ -1,0 +1,3 @@
+[submodule "WhiSQI"]
+	path = WhiSQI
+	url = https://github.com/MxRobsta/WhiSQI.git

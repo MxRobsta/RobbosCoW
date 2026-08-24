@@ -1,0 +1,8 @@
+name: scow
+requires_audio: False
+
+d_model: 64
+nhead: 4
+num_layers: 1
+dropout: 0.1
+n_hearing: ${dataset.n_hearing}

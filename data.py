@@ -3,9 +3,23 @@ import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 
+from pathlib import Path
+import soundfile as sf
+
 
 class SpeechDatasetDual(Dataset):
-    def __init__(self, dataset_name, df_l, df_r, signals, feature_cols, train=True):
+    def __init__(
+        self,
+        dataset_name,
+        df_l,
+        df_r,
+        signals,
+        feature_cols,
+        requires_audio,
+        audio_dir,
+        audio_ftype,
+        train=True,
+    ):
         self.dataset_name = dataset_name
         self.df_l = df_l  # type: pd.DataFrame
         self.df_r = df_r  # type: pd.DataFrame
@@ -15,6 +29,10 @@ class SpeechDatasetDual(Dataset):
         self.set_hl_levels()
 
         self.train = train
+
+        self.requires_audio = requires_audio
+        self.audio_dir = Path(audio_dir)
+        self.audio_ftype = audio_ftype
 
     def set_hl_levels(self):
         hl_levels = self.df_l["hearing_loss"].unique()
@@ -68,11 +86,17 @@ class SpeechDatasetDual(Dataset):
         target = torch.tensor(target_val, dtype=torch.float32)
         n_words = torch.tensor(df_signal_l["n_words"].iloc[0], dtype=torch.int32)
 
-        return feats_l, feats_r, hearing_label, target, n_words, signal_id
+        if self.requires_audio:
+            audio, _ = sf.read(self.audio_dir / f"{signal_id}.{self.audio_ftype}")
+            audio = audio.T
+        else:
+            audio = None
+
+        return audio, feats_l, feats_r, hearing_label, target, n_words, signal_id
 
 
 def collate_fn_dual(batch):
-    feats_l, feats_r, hearing_labels, targets, _, signal_ids = zip(*batch)
+    audio, feats_l, feats_r, hearing_labels, targets, _, signal_ids = zip(*batch)
     max_len_l = max(f.shape[0] for f in feats_l)
     max_len_r = max(f.shape[0] for f in feats_r)
     dim = feats_l[0].shape[1]
@@ -110,6 +134,15 @@ def collate_fn_dual(batch):
             )
         )
 
+    if audio[0] is None:
+        audio_tensor = audio
+    else:
+        max_audio = max(x.shape[-1] for x in audio)
+        audio_tensor = torch.zeros([len(audio), 2, max_audio])
+        for i, a in enumerate(audio):
+            length = a.shape[-1]
+            audio_tensor[i, :, :length] += a
+
     feats_l = torch.stack(padded_l)
     feats_r = torch.stack(padded_r)
     mask_l = torch.stack(mask_l)
@@ -117,7 +150,16 @@ def collate_fn_dual(batch):
     hearing_labels = torch.tensor(hearing_labels, dtype=torch.long)
     targets = torch.stack(targets)
 
-    return feats_l, mask_l, feats_r, mask_r, hearing_labels, targets, list(signal_ids)
+    return (
+        audio_tensor,
+        feats_l,
+        mask_l,
+        feats_r,
+        mask_r,
+        hearing_labels,
+        targets,
+        list(signal_ids),
+    )
 
 
 def collate_fn_dual_infer(batch):

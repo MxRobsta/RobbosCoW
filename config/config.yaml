@@ -1,7 +1,9 @@
 defaults:
   - dataset: clip1
+  - model: scow
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none
+  - _self_
 
 exp_name: ???
 seed: 42
@@ -38,18 +40,11 @@ data:
     # - dns_bak
     # - dns_ovrl
 
-model:
-  d_model: 64
-  nhead: 4
-  num_layers: 1
-  dropout: 0.1
-  n_hearing: ${dataset.n_hearing}
-
 train:
   batch_size: 1024
   epochs: 100
   lr: 1e-4
-  optim: sam-sgd
+  optim: adamw
   corr_lambda: 0.4
   val_split: 0.2
 

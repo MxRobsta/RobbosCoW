@@ -2,6 +2,15 @@ name: cpc3+clip1
 n_hearing: 4
 
 feature_csv: features/{dataset}/{subset}.features.{side}.csv
+
+signal_dir:
+  cpc3: data/clarity_CPC3_data/clarity_data/{subset}/signals
+  clip1: data/clip1/{subset}/signals
+
+ftype:
+  cpc3: wav
+  clip1: flac
+
 # metadata_fpath: data/clarity_CPC3_data/clarity_data/metadata/CPC3.{subset}.json
 # signal_dir: data/clarity_CPC3_data/clarity_data/{subset}/signals
 

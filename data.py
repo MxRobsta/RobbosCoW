@@ -34,6 +34,11 @@ class SpeechDatasetDual(Dataset):
         self.audio_dir = Path(audio_dir)
         self.audio_ftype = audio_ftype
 
+        for df in [self.df_l, self.df_r]:
+            df["audio_path"] = df["signal"].apply(
+                lambda x: str(self.audio_dir / f"{x}.{audio_ftype}")
+            )
+
     def set_hl_levels(self):
         hl_levels = self.df_l["hearing_loss"].unique()
 
@@ -87,7 +92,7 @@ class SpeechDatasetDual(Dataset):
         n_words = torch.tensor(df_signal_l["n_words"].iloc[0], dtype=torch.int32)
 
         if self.requires_audio:
-            audio, _ = sf.read(self.audio_dir / f"{signal_id}.{self.audio_ftype}")
+            audio, _ = sf.read(df_signal_l["audio_fpath"].iloc[0])
             audio = audio.T
         else:
             audio = None

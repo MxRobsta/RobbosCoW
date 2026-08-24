@@ -133,14 +133,26 @@ def build_multiloader(
 
     train, val = {}, {}
     for ds in datasets:
+
+        if isinstance(audio_dir, str):
+            # Just one dataset so a single audio dir is provided
+            this_audio_dir = audio_dir
+            ftype = audio_ftype
+        else:
+            # Multiple datasets so we have a dictionary of audio dirs for each ds
+            this_audio_dir = audio_dir[ds]
+            ftype = audio_ftype[ds]
+
+        this_audio_dir = this_audio_dir.format(subset="train")
+
         t, v = build_singledataset(
             ds,
             val_split,
             csv_path,
             features,
             requires_audio,
-            audio_dir,
-            audio_ftype,
+            this_audio_dir,
+            ftype,
             seed,
             debug,
         )
@@ -339,7 +351,7 @@ def main(cfg):
         cfg.data.csv_path,
         cfg.data.feature_cols,
         cfg.model.requires_audio,
-        cfg.dataset.signal_dir.format(subset="train"),
+        cfg.dataset.signal_dir,
         cfg.dataset.ftype,
         cfg.train.batch_size,
         cfg.seed,

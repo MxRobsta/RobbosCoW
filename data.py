@@ -92,7 +92,7 @@ class SpeechDatasetDual(Dataset):
         n_words = torch.tensor(df_signal_l["n_words"].iloc[0], dtype=torch.int32)
 
         if self.requires_audio:
-            audio, _ = sf.read(df_signal_l["audio_fpath"].iloc[0])
+            audio, _ = sf.read(df_signal_l["audio_path"].iloc[0])
             audio = audio.T
         else:
             audio = None

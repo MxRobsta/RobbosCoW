@@ -238,13 +238,15 @@ def train_one_epoch(
         _signal_ids,
     ) in dataloader:
         if requires_audio:
-            preds = model(audio[:, 0, :])
+            preds = model(audio[:, 0, :].to(device))
         else:
             feats_l, mask_l = feats_l.to(device), mask_l.to(device)
             feats_r, mask_r = feats_r.to(device), mask_r.to(device)
-            hearing_labels, targets = hearing_labels.to(device), targets.to(device)
+            hearing_labels = hearing_labels.to(device)
 
             preds = model(feats_l, mask_l, feats_r, mask_r, hearing_labels)
+
+        targets = targets.to(device)
 
         mse = mse_loss_fn(preds, targets)
         corr = batch_pearson_corr(preds, targets)
@@ -300,7 +302,7 @@ def evaluate(model, requires_audio, dataloader, data_subset, device, use_tqdm):
             _signal_ids,
         ) in dataloader:
             if requires_audio:
-                preds = model(audio[:, 0, :])
+                preds = model(audio[:, 0, :].to(device))
             else:
                 feats_l, mask_l = feats_l.to(device), mask_l.to(device)
                 feats_r, mask_r = feats_r.to(device), mask_r.to(device)

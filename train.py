@@ -17,7 +17,7 @@ from data import (
 )
 from model import TransformerRegressorDual
 from sam import SAM
-from WhiSQI.models.whisper_ni_predictors import cpcTransformer
+from WhiSQI.models.whisper_ni_predictors import cpcTransformer, cpcLSTMLayers
 
 
 def set_seed(seed: int):
@@ -60,6 +60,8 @@ def build_model(cfg):
         )
     elif cfg.model.name == "whisqi":
         return cpcTransformer(model_type="multi")
+    elif cfg.model.name == "whisqi-lstm":
+        return cpcLSTMLayers(cfg.model.hidden_dim)
     else:
         raise NotImplementedError(f"Couldn't recognise model {cfg.name}")
 

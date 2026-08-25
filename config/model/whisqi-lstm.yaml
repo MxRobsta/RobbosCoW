@@ -1,0 +1,3 @@
+name: whisqi-lstm
+requires_audio: True
+hidden_dim: 512

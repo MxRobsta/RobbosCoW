@@ -41,8 +41,8 @@ data:
     # - dns_ovrl
 
 train:
-  batch_size: 1024
-  epochs: 100
+  batch_size: 256
+  epochs: 50
   lr: 1e-4
   optim: adamw
   corr_lambda: 0.4
